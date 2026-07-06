@@ -110,9 +110,18 @@
     </div>
     </section>
 
-    <section class="reviews-section hidden" id="reviews">
-        <div class="reviews-banner" id="openReviewsBtn">
-            <h2>Відгуки</h2>
+   <section class="reviews-section hidden" id="reviews">
+        <div style="position: relative; width: 100%; max-width: 900px; margin: 0 auto;">
+            
+            <div class="reviews-banner" id="openReviewsBtn">
+                <h2>ВІДГУКИ</h2>
+            </div>
+
+            <button class="cta-btn admin-only add-review-btn" onclick="document.getElementById('reviewFileInput').click()">
+                📸 Додати відгук
+            </button>
+            <input type="file" id="reviewFileInput" accept="image/*" style="display: none;">
+            
         </div>
     </section>
 
@@ -210,21 +219,40 @@
             </div>
 
             <!-- ВІКНО 3: ГРАФІК РОБОТИ -->
-           <div id="scheduleEditingView" style="display: none;">
+          <div id="scheduleEditingView" style="display: none;">
                 <button class="back-to-menu-btn" onclick="switchCabinetView('cabinetMenuSection')">🔙 Назад до меню</button>
                 <h2 style="color: var(--accent-pink); margin-bottom: 20px;">⏰ Редагування графіка</h2>
                 
-                <div class="schedule-editor-container">
-                    <h3 style="color: #e0e0e0; margin-bottom: 10px; font-size: 1.1rem;">Керування вихідними та відпустками</h3>
-                    <p style="color: #888; font-size: 0.9rem; margin-bottom: 20px;">Оберіть дати, коли ви не приймаєте клієнтів. Ці дні автоматично стануть недоступними для запису.</p>
-                    
+                <div class="schedule-editor-container" style="margin-bottom: 20px;">
+                    <h3 style="color: #e0e0e0; margin-bottom: 10px; font-size: 1.1rem;">🌴 Вихідні та Відпустки</h3>
+                    <p style="color: #888; font-size: 0.9rem; margin-bottom: 20px;">Оберіть дати, коли ви не приймаєте клієнтів.</p>
                     <div style="display: flex; gap: 15px; margin-bottom: 20px;">
                         <input type="date" id="vacationDateInput" class="admin-date-input">
                         <button id="addVacationBtn" class="cta-btn" style="padding: 10px 20px; font-size: 1rem;">Додати вихідний</button>
                     </div>
+                    <div id="vacationTagsContainer" class="tags-container"></div>
+                </div>
 
-                    <h4 style="color: #aaa; margin-bottom: 10px;">Заплановані вихідні:</h4>
-                    <div id="vacationTagsContainer" class="tags-container">
+                <div class="schedule-editor-container">
+                    <h3 style="color: #e0e0e0; margin-bottom: 10px; font-size: 1.1rem;">📅 Стандартний графік на тиждень</h3>
+                    <p style="color: #888; font-size: 0.9rem; margin-bottom: 20px;">Додайте години прийому для кожного дня тижня. Вони будуть відображатися клієнтам.</p>
+                    
+                    <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
+                        <select id="dayOfWeekSelect" class="admin-date-input" style="flex: 1; min-width: 150px;">
+                            <option value="1">Понеділок</option>
+                            <option value="2">Вівторок</option>
+                            <option value="3">Середа</option>
+                            <option value="4">Четвер</option>
+                            <option value="5">П'ятниця</option>
+                            <option value="6">Субота</option>
+                            <option value="0">Неділя</option>
+                        </select>
+                        <input type="time" id="timeSlotInput" class="admin-date-input" style="flex: 1; min-width: 100px;">
+                        <button id="addTimeSlotBtn" class="cta-btn" style="padding: 10px 20px; font-size: 1rem;">Додати час</button>
+                    </div>
+
+                    <h4 style="color: #aaa; margin-bottom: 10px;">Години прийому на обраний день:</h4>
+                    <div id="timeTagsContainer" class="tags-container" style="border-color: #2a2a2a;">
                         </div>
                 </div>
             </div>
