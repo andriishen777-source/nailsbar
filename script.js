@@ -39,7 +39,7 @@ window.addEventListener("click", (event) => {
 });
 
 // --- ІНІЦІАЛІЗАЦІЯ БАЗИ ДАНИХ SUPABASE ---
-const supabaseUrl = 'https://bgmrbujrxdyhdrngcevx.supabase.co'; 
+const supabaseUrl = 'https://bgmrbujrxdyhdnmgcevx.supabase.co'; 
 const supabaseKey = 'sb_publishable_t7QyH8dHNBBbFQGY_62oRA_CaA5vXa_'; 
 // Змінили назву на supabaseClient, щоб не було конфлікту!
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
@@ -100,7 +100,26 @@ document.getElementById("bookingForm").addEventListener("submit", async function
     } else {
         // Успіх!
         alert("✅ Ваш запис успішно підтверджено! Чекаємо на вас.");
+        // --- ВІДПРАВКА В TELEGRAM ---
+        // ⚠️ ЗАМІНИ ЦІ ДВА РЯДКИ НА СВОЇ ДАНІ!
+        const botToken = '8826664279:AAGvZX59mOnuw1hKwa5tUtEZ2xkUWn1DFC4';
+        const chatId = '1366887003';
         
+        const tgMessage = `🔥 *НОВИЙ ЗАПИС!*\n\n👤 *Клієнт:* ${name}\n📞 *Телефон:* ${phone}\n📅 *Дата та час:* ${dateTime}\n💅 *Послуги:* ${selectedServices.join(', ')}\n💬 *Коментар:* ${comment || 'Немає'}`;
+        
+        try {
+            fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ 
+                    chat_id: chatId, 
+                    text: tgMessage,
+                    parse_mode: 'Markdown'
+                })
+            });
+        } catch (err) {
+            console.log("Помилка відправки в ТГ", err);
+        }
         // Очищаємо і закриваємо форму
         document.getElementById("bookingModal").style.display = "none";
         document.getElementById("bookingForm").reset();
@@ -181,22 +200,26 @@ function generateDays() {
 
     const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
 
-    // Демо-дані графіку
-    const vacationDays = [18, 19, 20]; 
-    const fullyBookedDays = [10, 15];  
+    // Беремо реальні вихідні, які ти задав у Кабінеті Адміністратора
+    let realVacations = JSON.parse(localStorage.getItem("adminVacations")) || [];
+    const fullyBookedDays = [10, 15]; // Демо-дні, де зайнято весь час
 
     for (let i = 1; i <= daysInMonth; i++) {
         let dayBtn = document.createElement("div");
         dayBtn.classList.add("day-box");
         dayBtn.innerText = i;
         
-        // Блокуємо дні, які вже минули (тільки якщо це поточний місяць)
+        // Формуємо дату циклу у форматі YYYY-MM-DD (як зберігається в адмінці)
+        let loopDateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
+        
+        // Блокуємо дні: якщо минули, якщо адмін поставив вихідний, або якщо повністю зайнято
         if (isCurrentMonth && i < today.getDate()) {
             dayBtn.classList.add("disabled");
-        } else if (vacationDays.includes(i) || fullyBookedDays.includes(i)) {
+        } else if (realVacations.includes(loopDateStr) || fullyBookedDays.includes(i)) {
             dayBtn.classList.add("disabled");
-            dayBtn.addEventListener("click", () => showToast("Цей день зайнятий або вихідний!"));
+            dayBtn.addEventListener("click", () => showToast("Цей день повністю зайнятий або вихідний!"));
         } else {
+            // Нормальний, доступний день
             dayBtn.addEventListener("click", () => {
                 document.querySelectorAll(".day-box").forEach(el => el.classList.remove("selected"));
                 dayBtn.classList.add("selected");
@@ -430,3 +453,263 @@ goToBookingBtn.addEventListener("click", () => {
     checkBookingModal.style.display = "none";
     document.getElementById("bookingModal").style.display = "flex"; // Відкриваємо форму запису
 });
+// --- ЛОГІКА ВХОДУ ТА КАБІНЕТУ АДМІНІСТРАТОРА ---
+const loginAdminBtn = document.getElementById("loginAdminBtn");
+const adminPasswordInput = document.getElementById("adminPasswordInput");
+const adminCabinetBtn = document.getElementById("adminCabinetBtn");
+const adminCabinetModal = document.getElementById("adminCabinetModal");
+const closeCabinetBtn = document.querySelector(".close-cabinet-btn");
+const adminSearchInput = document.getElementById("adminSearchInput");
+
+// Перевіряємо при завантаженні сайту, чи не залогінились ми раніше
+if (localStorage.getItem("isAdmin") === "true") {
+    document.body.classList.add("admin-mode-active");
+}
+
+// 1. АВТОРИЗАЦІЯ
+if (loginAdminBtn) {
+    loginAdminBtn.addEventListener("click", () => {
+        const phone = document.getElementById("checkPhoneInput").value.replace(/\D/g, '');
+        const password = adminPasswordInput.value;
+        
+        loginAdminBtn.innerText = "Перевірка...";
+        
+        if (phone === "0680011001" && password === "lviv_avokado2007") {
+            // УСПІХ! Вмикаємо режим адміна
+            document.body.classList.add("admin-mode-active");
+            localStorage.setItem("isAdmin", "true"); // Запам'ятовуємо в браузері
+            
+            alert("✅ Вітаємо в панелі управління, Бос!");
+            document.getElementById("checkBookingModal").style.display = "none";
+        } else {
+            alert("❌ Невірний пароль!");
+        }
+        loginAdminBtn.innerText = "Увійти в систему";
+    });
+}
+
+// 2. ВІДКРИТТЯ КАБІНЕТУ ТА ЗАВАНТАЖЕННЯ ДАНИХ
+if (adminCabinetBtn) {
+    adminCabinetBtn.addEventListener("click", () => {
+        adminCabinetModal.style.display = "flex";
+        loadAdminData();
+    });
+}
+if (closeCabinetBtn) {
+    closeCabinetBtn.addEventListener("click", () => adminCabinetModal.style.display = "none");
+}
+
+// 3. ФУНКЦІЯ ГЕНЕРАЦІЇ БАЗИ КЛІЄНТІВ
+// --- ФУНКЦІЯ НАВІГАЦІЇ ПО КАБІНЕТУ (КОРИДОР) ---
+function switchCabinetView(viewId) {
+    // Ховаємо всі секції
+    const views = ['cabinetMenuSection', 'upcomingBookingsView', 'clientDatabaseView', 'scheduleEditingView'];
+    views.forEach(id => {
+        document.getElementById(id).style.display = 'none';
+    });
+    // Показуємо потрібну
+    document.getElementById(viewId).style.display = 'block';
+
+    // Якщо відкриваємо списки - оновлюємо дані з бази
+    if (viewId === 'upcomingBookingsView' || viewId === 'clientDatabaseView') {
+        loadAdminData();
+    }
+}
+
+// При відкритті кабінету завжди показуємо коридор
+if (adminCabinetBtn) {
+    adminCabinetBtn.addEventListener("click", () => {
+        adminCabinetModal.style.display = "flex";
+        switchCabinetView('cabinetMenuSection'); // Відкриваємо коридор
+    });
+}
+
+// --- ФУНКЦІЯ ЗАВАНТАЖЕННЯ ДАНИХ (ДЛЯ ОБОХ ТАБЛИЦЬ) ---
+async function loadAdminData() {
+    const adminTbody = document.getElementById("adminTableBody");
+    const upcomingTbody = document.getElementById("upcomingTableBody");
+    
+    adminTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Завантаження даних... ⏳</td></tr>";
+    upcomingTbody.innerHTML = "<tr><td colspan='4' style='text-align:center;'>Завантаження записів... ⏳</td></tr>";
+    
+    const { data: bookings, error } = await supabaseClient
+        .from('bookings')
+        .select('*')
+        .order('created_at', { ascending: false });
+        
+    if (error) {
+        adminTbody.innerHTML = "<tr><td colspan='5' style='text-align:center; color:red;'>Помилка підключення до бази</td></tr>";
+        return;
+    }
+
+    // --- ЛОГІКА ДЛЯ БАЗИ КЛІЄНТІВ ---
+    const clients = {};
+    bookings.forEach(b => {
+        if (!clients[b.client_phone]) {
+            clients[b.client_phone] = { name: b.client_name, phone: b.client_phone, lastBooking: b.booking_date, count: 0 };
+        }
+        clients[b.client_phone].count++; 
+    });
+
+    const clientArray = Object.values(clients);
+    document.getElementById("totalClientsCount").innerText = clientArray.length;
+    document.getElementById("totalBookingsCount").innerText = bookings.length;
+
+    renderAdminTable(clientArray);
+
+    // Додаємо пошук по клієнтах
+    if(adminSearchInput) {
+        adminSearchInput.addEventListener("input", (e) => {
+            const term = e.target.value.toLowerCase();
+            const filtered = clientArray.filter(c => c.name.toLowerCase().includes(term) || c.phone.includes(term));
+            renderAdminTable(filtered);
+        });
+    }
+
+    // --- ЛОГІКА ДЛЯ МАЙБУТНІХ ЗАПИСІВ (ТА СЬОГОДНІ) ---
+    upcomingTbody.innerHTML = "";
+    
+    const today = new Date();
+    const monthNames = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
+    const todayStr = `${today.getDate()} ${monthNames[today.getMonth()]}`;
+
+    if (bookings.length === 0) {
+        // Змінили colspan на 5, бо тепер 5 колонок
+        upcomingTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Записів ще немає</td></tr>";
+    } else {
+        bookings.forEach(b => {
+            let tr = document.createElement("tr");
+            
+            const isToday = b.booking_date.includes(todayStr);
+            if (isToday) tr.classList.add("today-booking");
+            
+            tr.innerHTML = `
+                <td>${b.client_name} ${isToday ? '<span class="today-badge">СЬОГОДНІ</span>' : ''}</td>
+                <td>${b.client_phone}</td>
+                <td>${b.booking_date}</td>
+                <td style="font-size: 0.85rem; color: #aaa;">${b.services}</td>
+                <td><button class="delete-booking-btn" onclick="deleteBooking('${b.id}')" title="Скасувати запис">❌</button></td>
+            `;
+            upcomingTbody.appendChild(tr);
+        });
+    }
+
+function renderAdminTable(dataArray) {
+    const tbody = document.getElementById("adminTableBody");
+    tbody.innerHTML = "";
+    if (dataArray.length === 0) {
+        tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Нічого не знайдено</td></tr>";
+        return;
+    }
+    dataArray.forEach(client => {
+        let tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td contenteditable="true" class="editable-cell" title="Натисніть, щоб змінити">${client.name}</td>
+            <td contenteditable="true" class="editable-cell" title="Натисніть, щоб змінити">${client.phone}</td>
+            <td>${client.lastBooking}</td>
+            <td>${client.count}</td>
+            <td><button class="edit-cell-btn" title="Зберегти зміни">💾</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+// --- ЛОГІКА ВИХОДУ ---
+const adminLogoutBtn = document.getElementById("adminLogoutBtn");
+if (adminLogoutBtn) {
+    adminLogoutBtn.addEventListener("click", () => {
+        document.body.classList.remove("admin-mode-active");
+        localStorage.removeItem("isAdmin"); // Стирання пам'яті браузера
+        
+        // Закриваємо кабінет, якщо він був відкритий
+        document.getElementById("adminCabinetModal").style.display = "none";
+        
+        alert("Ви успішно вийшли з адміністративного акаунта.");
+    });
+}
+// --- ЛОГІКА РЕДАКТОРА ГРАФІКА ---
+const vacationDateInput = document.getElementById("vacationDateInput");
+const addVacationBtn = document.getElementById("addVacationBtn");
+const vacationTagsContainer = document.getElementById("vacationTagsContainer");
+
+// Витягуємо збережені вихідні з пам'яті браузера (або створюємо порожній масив)
+let savedVacations = JSON.parse(localStorage.getItem("adminVacations")) || [];
+
+// Функція малювання тегів
+function renderVacationTags() {
+    vacationTagsContainer.innerHTML = "";
+    if (savedVacations.length === 0) {
+        vacationTagsContainer.innerHTML = "<span style='color: #555;'>Немає запланованих вихідних</span>";
+        return;
+    }
+    
+    // Сортуємо дати за порядком
+    savedVacations.sort();
+
+    savedVacations.forEach(date => {
+        let tag = document.createElement("div");
+        tag.classList.add("vacation-tag");
+        // Перетворюємо 2026-07-25 у красивий формат 25.07.2026
+        const [y, m, d] = date.split('-');
+        tag.innerHTML = `
+            ${d}.${m}.${y}
+            <button class="delete-tag-btn" onclick="removeVacation('${date}')">&times;</button>
+        `;
+        vacationTagsContainer.appendChild(tag);
+    });
+}
+
+// Додавання вихідного
+if (addVacationBtn) {
+    addVacationBtn.addEventListener("click", () => {
+        const selectedDate = vacationDateInput.value;
+        if (!selectedDate) return alert("Оберіть дату!");
+        
+        if (!savedVacations.includes(selectedDate)) {
+            savedVacations.push(selectedDate);
+            localStorage.setItem("adminVacations", JSON.stringify(savedVacations));
+            renderVacationTags();
+            vacationDateInput.value = ""; // Очищаємо інпут
+            
+            // Одразу оновлюємо головний календар клієнтів!
+            if(document.getElementById("calendarModal").style.display === "flex") {
+                generateDays(); 
+            }
+        } else {
+            alert("Цей день вже відмічено як вихідний!");
+        }
+    });
+}
+
+// Видалення вихідного
+window.removeVacation = function(dateToRemove) {
+    savedVacations = savedVacations.filter(date => date !== dateToRemove);
+    localStorage.setItem("adminVacations", JSON.stringify(savedVacations));
+    renderVacationTags();
+    generateDays(); // Оновлюємо календар клієнтів
+};
+
+// Запускаємо малювання тегів при завантаженні
+renderVacationTags();
+}
+// --- ФУНКЦІЯ ВИДАЛЕННЯ ЗАПИСУ З БАЗИ ---
+window.deleteBooking = async function(bookingId) {
+    // Питаємо підтвердження
+    const isConfirmed = confirm("Ви впевнені, що хочете скасувати цей запис? Відмінити цю дію буде неможливо.");
+    
+    if (isConfirmed) {
+        // Запускаємо видалення з бази Supabase по унікальному ID запису
+        const { error } = await supabaseClient
+            .from('bookings')
+            .delete()
+            .eq('id', bookingId);
+            
+        if (error) {
+            console.error("Помилка видалення:", error);
+            alert("Сталася помилка при видаленні 😔 Спробуйте ще раз.");
+        } else {
+            alert("✅ Запис успішно скасовано!");
+            // Одразу перезавантажуємо таблиці, щоб запис зник з екрану
+            loadAdminData();
+        }
+    }
+};

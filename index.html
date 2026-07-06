@@ -6,17 +6,19 @@
     <title>Nail Studio | Premium</title>
     <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="style.css">
-        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 </head>
 <body>
-   <nav class="navbar">
+ <nav class="navbar">
         <div class="logo">NAIL<span>BAR</span></div>
         <div style="display: flex; gap: 15px;">
+            <button class="nav-btn admin-only" id="adminCabinetBtn" style="border-color: #E1306C; color: #E1306C;">👑 Кабінет</button>
+            <button class="nav-btn admin-only" id="adminLogoutBtn" style="border-color: #555; color: #888;">🚪 Вийти</button>
+            
             <button class="nav-btn" id="openCheckModalBtn">Перевірити запис</button>
             <button class="nav-btn">Записатися</button>
         </div>
     </nav>
-
     <header class="hero">
         <div class="hero-content hidden">
             <h1>Мистецтво на кінчиках пальців</h1>
@@ -123,6 +125,110 @@
                 <button class="carousel-btn next-btn">❯</button>
             </div>
             <p id="carouselCounter" class="carousel-counter">1 / 3</p>
+        </div>
+    </div>
+   <!-- МОДАЛЬНЕ ВІКНО: КАБІНЕТ АДМІНІСТРАТОРА (КОРИДОР) -->
+    <div id="adminCabinetModal" class="modal" style="z-index: 2000;">
+        <div class="modal-content" style="max-width: 950px; width: 95%; max-height: 90vh; overflow-y: auto;">
+            <span class="close-cabinet-btn close-btn">&times;</span>
+            
+            <!-- ГОЛОВНЕ МЕНЮ (КОРИДОР) -->
+            <div id="cabinetMenuSection">
+                <h2 style="color: var(--accent-pink); margin-bottom: 30px; text-align: center;">👑 Панель Управління</h2>
+                <div class="cabinet-grid">
+                    <div class="cabinet-card" onclick="switchCabinetView('upcomingBookingsView')">
+                        <h3>📅 Майбутні записи</h3>
+                        <p>Список записів на сьогодні та майбутні дні</p>
+                    </div>
+                    <div class="cabinet-card" onclick="switchCabinetView('clientDatabaseView')">
+                        <h3>👥 База клієнтів</h3>
+                        <p>Загальна статистика, історія та пошук клієнтів</p>
+                    </div>
+                    <div class="cabinet-card" onclick="switchCabinetView('scheduleEditingView')">
+                        <h3>⏰ Графік роботи</h3>
+                        <p>Налаштування вихідних та робочих годин (в розробці)</p>
+                    </div>
+                </div>
+            </div>
+
+<!-- ВІКНО 1: МАЙБУТНІ ЗАПИСИ -->
+            <div id="upcomingBookingsView" style="display: none;">
+                <button class="back-to-menu-btn" onclick="switchCabinetView('cabinetMenuSection')">🔙 Назад до меню</button>
+                <h2 style="color: var(--accent-pink); margin-bottom: 20px;">📅 Майбутні записи</h2>
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Клієнт</th>
+                                <th>Телефон</th>
+                                <th>Дата і Час</th>
+                                <th>Послуги</th>
+                                <th>Дія</th> <!-- ДОДАЛИ НОВУ КОЛОНКУ -->
+                            </tr>
+                        </thead>
+                        <tbody id="upcomingTableBody">
+                            <!-- Сюди будуть падати записи -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ВІКНО 2: БАЗА КЛІЄНТІВ -->
+            <div id="clientDatabaseView" style="display: none;">
+                <button class="back-to-menu-btn" onclick="switchCabinetView('cabinetMenuSection')">🔙 Назад до меню</button>
+                <h2 style="color: var(--accent-pink); margin-bottom: 20px;">👥 База клієнтів</h2>
+                
+                <div class="admin-stats">
+                    <div class="stat-card">
+                        <h3>Всього клієнтів</h3>
+                        <p id="totalClientsCount">0</p>
+                    </div>
+                    <div class="stat-card">
+                        <h3>Всього записів</h3>
+                        <p id="totalBookingsCount">0</p>
+                    </div>
+                </div>
+
+                <input type="text" id="adminSearchInput" placeholder="🔍 Пошук за ім'ям або номером..." style="margin-bottom: 20px;">
+
+                <div class="table-responsive">
+                    <table class="admin-table">
+                        <thead>
+                            <tr>
+                                <th>Ім'я</th>
+                                <th>Телефон</th>
+                                <th>Останній запис</th>
+                                <th>К-сть записів</th>
+                                <th>Дія</th>
+                            </tr>
+                        </thead>
+                        <tbody id="adminTableBody">
+                            <!-- Сюди падає база -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- ВІКНО 3: ГРАФІК РОБОТИ -->
+           <div id="scheduleEditingView" style="display: none;">
+                <button class="back-to-menu-btn" onclick="switchCabinetView('cabinetMenuSection')">🔙 Назад до меню</button>
+                <h2 style="color: var(--accent-pink); margin-bottom: 20px;">⏰ Редагування графіка</h2>
+                
+                <div class="schedule-editor-container">
+                    <h3 style="color: #e0e0e0; margin-bottom: 10px; font-size: 1.1rem;">Керування вихідними та відпустками</h3>
+                    <p style="color: #888; font-size: 0.9rem; margin-bottom: 20px;">Оберіть дати, коли ви не приймаєте клієнтів. Ці дні автоматично стануть недоступними для запису.</p>
+                    
+                    <div style="display: flex; gap: 15px; margin-bottom: 20px;">
+                        <input type="date" id="vacationDateInput" class="admin-date-input">
+                        <button id="addVacationBtn" class="cta-btn" style="padding: 10px 20px; font-size: 1rem;">Додати вихідний</button>
+                    </div>
+
+                    <h4 style="color: #aaa; margin-bottom: 10px;">Заплановані вихідні:</h4>
+                    <div id="vacationTagsContainer" class="tags-container">
+                        </div>
+                </div>
+            </div>
+
         </div>
     </div>
 <footer class="footer" id="contacts">
