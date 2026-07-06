@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nail Studio | Premium</title>
+    <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;400;600&family=Playfair+Display:ital,wght@0,400;0,600;1,400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+        <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+   <nav class="navbar">
+        <div class="logo">NAIL<span>BAR</span></div>
+        <div style="display: flex; gap: 15px;">
+            <button class="nav-btn" id="openCheckModalBtn">Перевірити запис</button>
+            <button class="nav-btn">Записатися</button>
+        </div>
+    </nav>
+
+    <header class="hero">
+        <div class="hero-content hidden">
+            <h1>Мистецтво на кінчиках пальців</h1>
+            <p>Преміальний манікюр. Бездоганна стерильність. Ваш ідеальний час.</p>
+            <button class="cta-btn">Обрати час</button>
+
+            <div class="on-page-nav">
+                <a href="#services">Прайс</a>
+                <a href="#about">Майстер</a>
+                <a href="#reviews">Відгуки</a>
+                <a href="#contacts">Контакти</a>
+            </div>
+        </div>
+    </header>
+
+    <section class="services" id="services">
+        <h2 class="hidden">Прайс-лист</h2>
+        <p class="hidden" style="color: #888; margin-bottom: 40px; text-transform: uppercase; letter-spacing: 2px;">Категорія: Майстер</p>
+        
+        <div class="price-list-container">
+            <div class="price-item hidden">
+                <div class="price-name">Комплекс (Зняття + Манікюр + Покриття)</div>
+                <div class="price-value">650 ₴</div>
+            </div>
+            <div class="price-item hidden" style="transition-delay: 0.1s">
+                <div class="price-name">Комплекс (Зняття + Манікюр європейський + Покриття)</div>
+                <div class="price-value">650 ₴</div>
+            </div>
+            <div class="price-item hidden" style="transition-delay: 0.2s">
+                <div class="price-name">Зняття + Покриття</div>
+                <div class="price-value">650 ₴</div>
+            </div>
+            <div class="price-item hidden" style="transition-delay: 0.3s">
+                <div class="price-name">Манікюр + Покриття</div>
+                <div class="price-value">620 ₴</div>
+            </div>
+            <div class="price-item hidden" style="transition-delay: 0.4s">
+                <div class="price-name">Зняття + Манікюр</div>
+                <div class="price-value">550 ₴</div>
+            </div>
+            <div class="price-item hidden" style="transition-delay: 0.5s">
+                <div class="price-name">Манікюр гігієнічний + Японська втирка</div>
+                <div class="price-value">550 ₴</div>
+            </div>
+            <div class="price-item hidden" style="transition-delay: 0.6s">
+                <div class="price-name">Чоловічий манікюр гігієнічний</div>
+                <div class="price-value">500 ₴</div>
+            </div>
+            <div class="price-item hidden" style="transition-delay: 0.7s">
+                <div class="price-name">Однотонне покриття</div>
+                <div class="price-value">450 ₴</div>
+            </div>
+            <div class="price-item hidden" style="transition-delay: 0.8s">
+                <div class="price-name">Манікюр гігієнічний</div>
+                <div class="price-value">400 ₴</div>
+            </div>
+            <div class="price-item hidden" style="transition-delay: 0.9s">
+                <div class="price-name">Дитячий манікюр гігієнічний</div>
+                <div class="price-value">250 ₴</div>
+            </div>
+        </div>
+    </section>
+   <section class="about-master hidden" id="about">
+        <div class="about-content">
+            <img src="https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&q=80" alt="Ваш Майстер" class="master-img">
+            <div class="about-text">
+                <h2>Ваш майстер</h2>
+                <p>Привіт! Я — топ-майстер з досвідом понад 5 років. Моя філософія — це безпека, естетика та ідеальні відблиски.</p>
+                <p style="margin-top: 15px;">Працюю виключно на преміум-матеріалах із повною стерилізацією інструменту за нормами МОЗ. Ваш комфорт та здоров'я — мій головний пріоритет.</p>
+            </div>
+        </div>
+
+        <div class="certificates-section">
+            <h3 class="cert-title">Сертифікати та дипломи</h3>
+            <div class="cert-carousel">
+                <img src="https://images.unsplash.com/photo-1589330694653-efa6482d8cbb?auto=format&fit=crop&q=80" class="cert-img" onclick="openCert(this.src)" alt="Сертифікат">
+                <img src="https://images.unsplash.com/photo-1574607383471-155018a1a3de?auto=format&fit=crop&q=80" class="cert-img" onclick="openCert(this.src)" alt="Сертифікат">
+                <img src="https://images.unsplash.com/photo-1606326608606-aa0b62935f2b?auto=format&fit=crop&q=80" class="cert-img" onclick="openCert(this.src)" alt="Сертифікат">
+                <img src="https://images.unsplash.com/photo-1589330694653-efa6482d8cbb?auto=format&fit=crop&q=80" class="cert-img" onclick="openCert(this.src)" alt="Сертифікат">
+            </div>
+        </div>
+    </section>
+
+    <div id="certModal" class="modal" style="z-index: 1300;">
+        <div class="modal-content carousel-content">
+            <span class="close-cert-btn">&times;</span>
+            <img id="fullCertImage" src="" alt="Сертифікат" style="max-width: 90%; max-height: 80vh; border-radius: 10px; border: 2px solid var(--accent-pink);">
+        </div>
+    </div>
+    </section>
+
+    <section class="reviews-section hidden" id="reviews">
+        <div class="reviews-banner" id="openReviewsBtn">
+            <h2>Відгуки</h2>
+        </div>
+    </section>
+
+    <div id="reviewsModal" class="modal" style="z-index: 1200;">
+        <div class="modal-content carousel-content">
+            <span class="close-reviews-btn">&times;</span>
+            <div class="carousel-container">
+                <button class="carousel-btn prev-btn">❮</button>
+                <img id="carouselImage" src="" alt="Відгук">
+                <button class="carousel-btn next-btn">❯</button>
+            </div>
+            <p id="carouselCounter" class="carousel-counter">1 / 3</p>
+        </div>
+    </div>
+<footer class="footer" id="contacts">
+        <div class="footer-content">
+            <div class="footer-section">
+                <h4>Контакти</h4>
+                <p>📞 +38 (099) 123-45-67</p>
+                <p>📍 м. Вінниця, вул. Соборна, 10</p>
+            </div>
+            <div class="footer-section">
+                <h4>Графік роботи</h4>
+                <p>Пн-Пт: 10:00 - 20:00</p>
+                <p>Сб-Нд: 11:00 - 18:00</p>
+            </div>
+            <div class="footer-section">
+                <h4>Соцмережі</h4>
+                <a href="#" class="social-link">Instagram</a>
+                <a href="#" class="social-link">TikTok</a>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <p>&copy; 2026 Nail Studio. Всі права захищено.</p>
+        </div>
+    </footer>
+
+    <div id="bookingModal" class="modal">
+        <div class="modal-content">
+            <span class="close-btn">&times;</span>
+            <h2>Ваш запис</h2>
+            
+            <form id="bookingForm">
+                <input type="text" id="clientName" placeholder="Ваше ім'я" required>
+                <input type="tel" id="clientPhone" placeholder="+38 (000) 000-00-00" required>
+
+                <div class="compact-services-container">
+                    <p style="color: #888; font-size: 0.9rem; margin-bottom: 10px;">Оберіть послугу:</p>
+                    <div class="compact-services-list">
+                        <label class="custom-checkbox">
+                            <input type="checkbox" value="Комплекс (Зняття + Манікюр + Покриття)" class="modal-service-cb"> 
+                            <span>Комплекс (Зн+Ман+Покр) - 650 ₴</span>
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" value="Зняття + Покриття" class="modal-service-cb"> 
+                            <span>Зняття + Покриття - 650 ₴</span>
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" value="Манікюр + Покриття" class="modal-service-cb"> 
+                            <span>Манікюр + Покриття - 620 ₴</span>
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" value="Зняття + Манікюр" class="modal-service-cb"> 
+                            <span>Зняття + Манікюр - 550 ₴</span>
+                        </label>
+                        <label class="custom-checkbox">
+                            <input type="checkbox" value="Однотонне покриття" class="modal-service-cb"> 
+                            <span>Однотонне покриття - 450 ₴</span>
+                        </label>
+                    </div>
+                </div>
+
+                <div class="custom-datetime-btn" id="openCalendarBtn">📅 Оберіть дату та час</div>
+                <input type="hidden" id="selectedDateTime" required>
+                
+                <textarea id="clientComment" placeholder="Додаткові побажання (необов'язково)"></textarea>
+
+                <button type="submit" class="cta-btn submit-btn">Підтвердити запис</button>
+            </form>
+        </div>
+    </div>
+    <!-- Модальне вікно КАЛЕНДАРЯ -->
+    <div id="calendarModal" class="modal" style="z-index: 1100;">
+        <div class="modal-content calendar-content">
+            <span class="close-calendar-btn">&times;</span>
+            
+            <!-- Шапка календаря -->
+           <div class="calendar-header">
+                <h2>Оберіть дату</h2>
+                <div class="month-nav">
+                    <span id="prevMonthBtn" class="month-btn">❮</span>
+                    <span id="currentMonthYear">Місяць Рік</span>
+                    <span id="nextMonthBtn" class="month-btn">❯</span>
+                </div>
+            </div>
+            
+            <!-- Сітка дат -->
+            <div class="calendar-grid" id="calendarDays">
+                <!-- Дні генеруються через JS -->
+            </div>
+
+            <!-- Сітка годин -->
+            <h2 id="timeSlotsTitle" style="font-size: 1.5rem; margin-top: 25px; display: none;">Оберіть час</h2>
+            <div class="time-grid" id="timeSlots" style="display: none;">
+                <!-- Години генеруються через JS -->
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast" style="z-index: 9999;">Цей час вже заброньовано! 💖</div>
+   
+    <div id="checkBookingModal" class="modal" style="z-index: 1050;">
+        <div class="modal-content">
+            <span class="close-check-btn close-btn">&times;</span>
+            <h2>Мій запис</h2>
+            
+            <div id="checkPhoneSection">
+                <p style="color: #888; font-size: 0.9rem; margin-bottom: 15px; text-align: center;">Введіть номер телефону, вказаний при записі</p>
+                <input type="tel" id="checkPhoneInput" placeholder="068 000 00 00" required style="margin-bottom: 15px;">
+                <button class="cta-btn submit-btn" id="verifyPhoneBtn">Знайти запис</button>
+            </div>
+
+            <div id="adminLoginSection" style="display: none; margin-top: 15px;">
+                <p style="color: var(--accent-pink); text-align: center; margin-bottom: 15px; font-weight: bold;">🔒 Вхід для адміністратора</p>
+                <input type="password" id="adminPasswordInput" placeholder="Введіть пароль" style="margin-bottom: 15px;">
+                <button class="cta-btn submit-btn" id="loginAdminBtn">Увійти в систему</button>
+            </div>
+
+            <div id="checkResultSection" style="display: none; text-align: center; margin-top: 20px;">
+                <p style="color: #ccc; margin-bottom: 20px;" id="checkResultMessage">На жаль, за цим номером записів не знайдено.</p>
+                <button class="cta-btn submit-btn" id="goToBookingBtn">Записатися зараз</button>
+            </div>
+        </div>
+    </div>
+    
+    <script src="script.js"></script>
+</body>
+</html>

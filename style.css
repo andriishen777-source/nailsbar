@@ -1,0 +1,777 @@
+/* Змінні кольорів та шрифтів для зручності */
+:root {
+    --bg-color: #0d0d0d;
+    --text-color: #f2f2f2;
+    --accent-pink: #E1306C; /* Благородний рожевий */
+    --font-headings: 'Playfair Display', serif; /* Для заголовків */
+    --font-text: 'Montserrat', sans-serif;      /* Для звичайного тексту */
+}
+
+* { 
+    margin: 0; 
+    padding: 0; 
+    box-sizing: border-box; 
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--text-color);
+    font-family: var(--font-text);
+    overflow-x: hidden; /* Щоб не було горизонтального скролу */
+}
+
+h1, h2, h3 { 
+    font-family: var(--font-headings); 
+    font-weight: 400; 
+}
+
+/* Навігація зі скляним ефектом */
+.navbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 20px 5%;
+    position: fixed;
+    width: 100%;
+    top: 0;
+    background: rgba(13, 13, 13, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 100;
+}
+
+.logo { 
+    font-size: 1.5rem; 
+    font-weight: 600; 
+    letter-spacing: 2px; 
+}
+.logo span { 
+    color: var(--accent-pink); 
+}
+
+/* Кнопки */
+button {
+    cursor: pointer;
+    border: none;
+    outline: none;
+    transition: 0.3s ease;
+    font-family: var(--font-text);
+}
+
+.nav-btn {
+    background: transparent;
+    color: var(--text-color);
+    border: 1px solid var(--accent-pink);
+    padding: 8px 20px;
+    border-radius: 30px;
+}
+.nav-btn:hover { 
+    background: var(--accent-pink); 
+}
+
+.cta-btn {
+    background: var(--accent-pink);
+    color: white;
+    padding: 15px 40px;
+    font-size: 1.2rem;
+    border-radius: 30px;
+    box-shadow: 0 4px 15px rgba(225, 48, 108, 0.4);
+}
+.cta-btn:hover { 
+    transform: translateY(-3px); 
+    box-shadow: 0 6px 20px rgba(225, 48, 108, 0.6); 
+}
+
+/* Головний екран з фоновим фото */
+/* Головний екран з фоновим фото та блюром */
+.hero {
+    height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    padding: 0 5%;
+    position: relative; /* Для правильного позиціювання фону */
+    overflow: hidden; /* Щоб блюр не вилазив за краї */
+}
+
+/* Створюємо окремий шар для фону, щоб блюрити ТІЛЬКИ картинку, а не текст */
+.hero::before {
+    content: "";
+    position: absolute;
+    top: -5%; /* Робимо фон трохи більшим, щоб розмиті краї не світилися білим */
+    left: -5%;
+    width: 110%;
+    height: 110%;
+    /* Тут посилання на естетичне фото темних нігтів/рук */
+    background: url('https://images.unsplash.com/photo-1522337660859-02fbefca4702?auto=format&fit=crop&q=80') center/cover no-repeat;
+    
+    /* Додаємо сильний блюр */
+    filter: blur(12px);
+    
+    /* Затемнюємо фото, щоб текст добре читався */
+    opacity: 0.35; 
+    
+    z-index: -2; /* Ховаємо під усі інші елементи */
+}
+
+/* Додаємо ледь помітний чорний градієнт поверх блюру для ідеального злиття з нижнім чорним фоном сайту */
+.hero::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: linear-gradient(to bottom, rgba(13, 13, 13, 0.2) 0%, rgba(13, 13, 13, 1) 100%);
+    z-index: -1;
+}
+
+/* Робимо текст на головному екрані чіткішим */
+.hero h1 { 
+    font-size: 4.5rem; 
+    margin-bottom: 20px; 
+    text-shadow: 0px 4px 15px rgba(0, 0, 0, 0.8); /* Тінь для тексту, щоб не зливався */
+}
+.hero p { 
+    font-size: 1.2rem; 
+    margin-bottom: 40px; 
+    color: #e0e0e0; 
+    text-shadow: 0px 2px 10px rgba(0, 0, 0, 0.8);
+}
+
+/* Секція Послуг */
+.services { 
+    padding: 100px 5%; 
+    text-align: center; 
+}
+.services h2 { 
+    font-size: 2.5rem; 
+    margin-bottom: 50px; 
+}
+ 
+
+.service-card:hover { 
+    border-bottom: 3px solid var(--accent-pink); 
+    transform: translateY(-10px); 
+}
+.service-card h3 { 
+    font-size: 1.5rem; 
+    margin-bottom: 10px; 
+}
+.service-card p { 
+    color: #888; 
+    margin-bottom: 20px; 
+}
+.service-card .price { 
+    font-size: 1.3rem; 
+    color: var(--accent-pink); 
+    font-weight: 600; 
+}
+
+/* --- МАГІЯ АНІМАЦІЙ --- */
+.hidden {
+    opacity: 0;
+    transform: translateY(50px); /* Блоки опущені вниз */
+    transition: all 0.8s ease-out;
+}
+.show {
+    opacity: 1;
+    transform: translateY(0); /* Блоки стають на місце */
+}
+/* --- ФУТЕР --- */
+.footer {
+    background-color: #080808;
+    padding: 60px 5% 20px;
+    border-top: 1px solid #1a1a1a;
+}
+.footer-content {
+    display: flex;
+    justify-content: space-around;
+    flex-wrap: wrap;
+    gap: 30px;
+    margin-bottom: 40px;
+}
+.footer-section h4 {
+    color: var(--accent-pink);
+    margin-bottom: 15px;
+    font-size: 1.2rem;
+}
+.footer-section p, .footer-section a {
+    color: #888;
+    margin-bottom: 10px;
+    display: block;
+    text-decoration: none;
+    transition: 0.3s;
+}
+.footer-section a:hover {
+    color: var(--text-color);
+}
+.footer-bottom {
+    text-align: center;
+    color: #555;
+    font-size: 0.9rem;
+    border-top: 1px solid #1a1a1a;
+    padding-top: 20px;
+}
+
+/* --- МОДАЛЬНЕ ВІКНО (КОНСТРУКТОР) --- */
+.modal {
+    display: none; /* Приховано за замовчуванням */
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(5px);
+    align-items: center;
+    justify-content: center;
+}
+.modal-content {
+    background-color: #121212;
+    padding: 40px;
+    border-radius: 15px;
+    border: 1px solid #2a2a2a;
+    width: 90%;
+    max-width: 450px;
+    position: relative;
+    animation: modalFadeIn 0.3s ease-out;
+}
+@keyframes modalFadeIn {
+    from { transform: translateY(-50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+.close-btn {
+    position: absolute;
+    top: 15px;
+    right: 20px;
+    color: #888;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+.close-btn:hover { color: var(--accent-pink); }
+.modal-content h2 { margin-bottom: 25px; text-align: center; }
+
+/* Форма всередині модалки */
+form { display: flex; flex-direction: column; gap: 15px; }
+input[type="text"], input[type="tel"], input[type="datetime-local"], textarea {
+    width: 100%;
+    padding: 12px 15px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: white;
+    font-family: var(--font-text);
+}
+input:focus, textarea:focus { border-color: var(--accent-pink); outline: none; }
+textarea { resize: none; height: 80px; }
+.options { display: flex; flex-direction: column; gap: 10px; margin: 10px 0; }
+.custom-checkbox { cursor: pointer; color: #ccc; }
+.submit-btn { width: 100%; margin-top: 10px; }
+/* --- КНОПКА ВИБОРУ ДАТИ В ОСНОВНІЙ ФОРМІ --- */
+.custom-datetime-btn {
+    width: 100%;
+    padding: 12px 15px;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-radius: 8px;
+    color: #aaa;
+    font-family: var(--font-text);
+    cursor: pointer;
+    text-align: left;
+    transition: 0.3s;
+}
+.custom-datetime-btn:hover {
+    border-color: var(--accent-pink);
+    color: white;
+}
+
+/* --- СІТКА КАЛЕНДАРЯ --- */
+.calendar-content {
+    max-width: 400px;
+}
+.calendar-grid {
+    display: grid;
+    grid-template-columns: repeat(7, 1fr);
+    gap: 8px;
+    margin-top: 15px;
+}
+.day-box {
+    background: #1a1a1a;
+    color: white;
+    padding: 10px 0;
+    text-align: center;
+    border-radius: 8px;
+    cursor: pointer;
+    border: 1px solid transparent;
+    transition: 0.3s;
+}
+.day-box:hover, .day-box.selected {
+    background: var(--accent-pink);
+    border-color: var(--accent-pink);
+}
+
+/* --- СІТКА ГОДИН --- */
+.time-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 10px;
+    margin-top: 15px;
+}
+.time-box {
+    padding: 10px;
+    text-align: center;
+    border-radius: 8px;
+    font-weight: 600;
+    transition: 0.3s;
+}
+/* Вільний час */
+.time-box.available {
+    background: #1a1a1a;
+    color: white;
+    cursor: pointer;
+    border: 1px solid #333;
+}
+.time-box.available:hover {
+    border-color: white;
+    background: #2a2a2a;
+}
+/* Заброньований час */
+.time-box.booked {
+    background: rgba(225, 48, 108, 0.1);
+    color: var(--accent-pink);
+    border: 1px solid var(--accent-pink);
+    cursor: not-allowed;
+    opacity: 0.7;
+}
+
+/* --- СПЛИВАЮЧЕ СПОВІЩЕННЯ (TOAST) --- */
+.toast {
+    position: fixed;
+    top: 20px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    background: var(--accent-pink);
+    color: white;
+    padding: 12px 25px;
+    border-radius: 30px;
+    box-shadow: 0 4px 15px rgba(225, 48, 108, 0.5);
+    font-weight: bold;
+    z-index: 2000;
+    opacity: 0;
+    visibility: hidden;
+    transition: 0.4s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+}
+.toast.show {
+    opacity: 1;
+    visibility: visible;
+    transform: translateX(-50%) translateY(0);
+}
+/* --- ПРО МАЙСТРА --- */
+.about-master {
+    padding: 80px 5%;
+    background-color: #121212; /* Трохи світліший чорний для контрасту */
+}
+.about-content {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 50px;
+    max-width: 1000px;
+    margin: 0 auto;
+    flex-wrap: wrap; /* Щоб на телефонах блоки падали один під одним */
+}
+.master-img {
+    width: 300px;
+    height: 400px;
+    object-fit: cover;
+    border-radius: 15px;
+    box-shadow: 0 10px 30px rgba(225, 48, 108, 0.15);
+    border: 1px solid #2a2a2a;
+}
+.about-text {
+    max-width: 500px;
+}
+.about-text h2 {
+    font-size: 2.5rem;
+    margin-bottom: 20px;
+    color: var(--accent-pink);
+}
+.about-text p {
+    font-size: 1.1rem;
+    line-height: 1.6;
+    color: #ccc;
+}
+
+/* --- ВІДГУКИ (КЛІКАБЕЛЬНИЙ БАНЕР) --- */
+.reviews-section {
+    padding: 60px 5%;
+    display: flex;
+    justify-content: center;
+}
+.reviews-banner {
+    width: 100%;
+    max-width: 900px;
+    height: 250px;
+    /* Затемнене фото нігтів на фоні */
+    background: linear-gradient(rgba(13, 13, 13, 0.6), rgba(13, 13, 13, 0.8)), 
+                url('https://images.unsplash.com/photo-1522337660859-02fbefca4702?auto=format&fit=crop&q=80') center/cover;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: 0.4s ease;
+    border: 1px solid #333;
+}
+.reviews-banner:hover {
+    transform: scale(1.02);
+    border-color: var(--accent-pink);
+    box-shadow: 0 10px 30px rgba(225, 48, 108, 0.3);
+}
+.reviews-banner h2 {
+    font-size: 3rem;
+    color: white;
+    text-transform: uppercase;
+    letter-spacing: 5px;
+}
+
+/* --- КАРУСЕЛЬ ВІДГУКІВ --- */
+.carousel-content {
+    background-color: transparent;
+    border: none;
+    box-shadow: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: 100%;
+    max-width: 600px;
+}
+.carousel-container {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    width: 100%;
+    justify-content: space-between;
+}
+#carouselImage {
+    max-width: 70%;
+    max-height: 70vh;
+    border-radius: 10px;
+    object-fit: contain;
+    border: 2px solid var(--accent-pink);
+    background: #000;
+}
+.carousel-btn {
+    background: rgba(225, 48, 108, 0.5);
+    color: white;
+    border: none;
+    font-size: 1.5rem;
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    cursor: pointer;
+    transition: 0.3s;
+    position: relative;
+}
+.carousel-btn:hover {
+    background: var(--accent-pink);
+    transform: scale(1.1);
+}
+.carousel-counter {
+    margin-top: 15px;
+    font-size: 1.2rem;
+    color: white;
+    font-weight: bold;
+}
+.close-reviews-btn {
+    position: absolute;
+    top: -40px;
+    right: 10px;
+    color: #aaa;
+    font-size: 35px;
+    cursor: pointer;
+}
+.close-reviews-btn:hover { color: var(--accent-pink); }
+/* --- СЕРТИФІКАТИ --- */
+.certificates-section {
+    width: 100%;
+    max-width: 1000px;
+    margin: 60px auto 0; /* Відступ від інформації про майстра */
+    text-align: center;
+}
+.cert-title {
+    font-size: 1.5rem;
+    color: #ccc;
+    margin-bottom: 25px;
+    letter-spacing: 2px;
+}
+.cert-carousel {
+    display: flex;
+    gap: 20px;
+    overflow-x: auto;
+    padding-bottom: 20px;
+    /* Робимо так, щоб картинки "прилипали" при гортанні */
+    scroll-snap-type: x mandatory; 
+    /* Стилізація скролбару (повзунка) */
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-pink) #1a1a1a;
+}
+.cert-carousel::-webkit-scrollbar {
+    height: 6px;
+}
+.cert-carousel::-webkit-scrollbar-thumb {
+    background: var(--accent-pink);
+    border-radius: 10px;
+}
+.cert-carousel::-webkit-scrollbar-track {
+    background: #1a1a1a;
+    border-radius: 10px;
+}
+.cert-img {
+    height: 220px; /* Висота сертифікатів */
+    border-radius: 10px;
+    scroll-snap-align: center;
+    cursor: pointer;
+    transition: 0.3s ease;
+    border: 1px solid #333;
+    object-fit: cover;
+    width: 160px; /* Робимо їх вертикальними, як документи */
+}
+.cert-img:hover {
+    transform: translateY(-8px);
+    border-color: var(--accent-pink);
+    box-shadow: 0 8px 20px rgba(225, 48, 108, 0.2);
+}
+.close-cert-btn {
+    position: absolute;
+    top: -40px;
+    right: 10px;
+    color: #aaa;
+    font-size: 35px;
+    cursor: pointer;
+}
+.close-cert-btn:hover { color: var(--accent-pink); }
+/* --- НОВИЙ КОМПАКТНИЙ ПРАЙС-ЛИСТ --- */
+.price-list-container {
+    max-width: 800px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 12px; /* Відстань між блоками */
+}
+
+.price-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #151515; /* Легкий контраст на чорному фоні */
+    padding: 18px 25px;
+    border-radius: 12px;
+    border-left: 4px solid transparent;
+    transition: 0.3s ease;
+    border: 1px solid #222;
+}
+
+.price-item:hover {
+    border-left: 4px solid var(--accent-pink);
+    background: #1a1a1a;
+    transform: translateX(10px); /* Легкий зсув вправо при наведенні */
+    border-color: #333;
+}
+
+.price-name {
+    font-size: 1.1rem;
+    color: #e0e0e0;
+    text-align: left;
+    flex: 1; /* Займає весь вільний простір */
+    padding-right: 20px;
+    font-weight: 500;
+}
+
+.price-value {
+    font-size: 1.25rem;
+    color: var(--accent-pink);
+    font-weight: 600;
+    white-space: nowrap; /* Щоб ціна не переносилася на новий рядок */
+}
+
+/* Адаптація для маленьких екранів телефонів */
+@media (max-width: 600px) {
+    .price-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 15px;
+    }
+    .price-value {
+        align-self: flex-end; /* Ціна стрибає в правий нижній кут */
+        font-size: 1.1rem;
+    }
+}
+/* Групуємо кнопку і бургер */
+/* --- НАВІГАЦІЯ ПРЯМО НА ПЕРШОМУ ЕКРАНІ --- */
+
+.on-page-nav {
+    margin-top: 50px; /* Відступ від головної кнопки */
+    display: flex;
+    justify-content: center;
+    gap: 20px;
+    flex-wrap: wrap; /* Щоб на телефонах красиво падало в два ряди */
+}
+
+.on-page-nav a {
+    color: #e0e0e0;
+    text-decoration: none;
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 2px;
+    padding: 12px 25px;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 30px;
+    background: rgba(0, 0, 0, 0.4);
+    backdrop-filter: blur(5px);
+    transition: all 0.3s ease;
+    
+    /* Додаємо початковий стан для анімації */
+    opacity: 0;
+    animation: fadeInUpNav 0.6s ease forwards;
+}
+
+.on-page-nav a:hover {
+    color: white;
+    border-color: var(--accent-pink);
+    background: rgba(225, 48, 108, 0.2);
+    transform: translateY(-3px);
+}
+
+/* Сама анімація випливання знизу-вгору */
+@keyframes fadeInUpNav {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Робимо каскад (затримку), щоб вони з'являлися по черзі: 1, 2, 3, 4 */
+.on-page-nav a:nth-child(1) { animation-delay: 0.1s; }
+.on-page-nav a:nth-child(2) { animation-delay: 0.2s; }
+.on-page-nav a:nth-child(3) { animation-delay: 0.3s; }
+.on-page-nav a:nth-child(4) { animation-delay: 0.4s; }
+
+.on-page-nav a:hover {
+    color: white;
+    border-color: var(--accent-pink);
+    background: rgba(225, 48, 108, 0.2); /* Легке рожеве світіння */
+    transform: translateY(-3px);
+}
+
+/* Адаптація для телефонів */
+@media (max-width: 600px) {
+    .on-page-nav {
+        gap: 12px;
+        margin-top: 40px;
+    }
+    .on-page-nav a {
+        font-size: 0.8rem;
+        padding: 10px 18px;
+        flex: 1 1 calc(50% - 12px); /* Робить по 2 кнопки в ряд на телефоні */
+    }
+}
+/* --- ПЛАВНИЙ СКРОЛ ТА ВІДСТУП ДЛЯ ПАНЕЛІ --- */
+html {
+    scroll-behavior: smooth;
+    scroll-padding-top: 90px; /* Це не дасть верхній панелі перекрити заголовки */
+}
+/* --- ШАПКА КАЛЕНДАРЯ --- */
+.calendar-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+}
+.calendar-header h2 {
+    font-size: 1.5rem;
+    margin: 0;
+}
+#currentMonthYear {
+    color: var(--accent-pink);
+    font-weight: 600;
+    font-size: 1.1rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+}
+
+/* --- НЕДОСТУПНІ ДНІ (Минулі, відпустка, зайняті) --- */
+.day-box.disabled {
+    background: rgba(225, 48, 108, 0.05); /* Ледь рожевий фон */
+    color: #555; /* Тьмяний текст */
+    border-color: rgba(225, 48, 108, 0.2);
+    cursor: not-allowed;
+    text-decoration: line-through; /* Закреслений текст */
+}
+.day-box.disabled:hover {
+    background: rgba(225, 48, 108, 0.05);
+    border-color: rgba(225, 48, 108, 0.2);
+    transform: none; /* Відключаємо підстрибування */
+}
+/* --- НАВІГАЦІЯ КАЛЕНДАРЯ --- */
+.month-nav {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+.month-btn {
+    cursor: pointer;
+    font-size: 1.2rem;
+    color: #888;
+    transition: 0.3s;
+    user-select: none;
+}
+.month-btn:hover { color: var(--accent-pink); }
+.month-btn.disabled { color: #333; cursor: not-allowed; }
+
+/* --- РОБИМО ПРАЙС-ЛИСТ КЛІКАБЕЛЬНИМ --- */
+.price-item {
+    cursor: pointer; /* З'являється ручка при наведенні */
+}
+
+/* --- КОМПАКТНИЙ ПРАЙС У МОДАЛЦІ --- */
+.compact-services-list {
+    max-height: 140px; /* Обмежуємо висоту */
+    overflow-y: auto;  /* Додаємо скрол */
+    background: #151515;
+    border: 1px solid #333;
+    border-radius: 8px;
+    padding: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    
+    /* Стилізуємо скролбар */
+    scrollbar-width: thin;
+    scrollbar-color: var(--accent-pink) #1a1a1a;
+}
+.compact-services-list::-webkit-scrollbar { width: 4px; }
+.compact-services-list::-webkit-scrollbar-thumb { background: var(--accent-pink); border-radius: 10px; }
+
+.custom-checkbox {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    color: #ccc;
+    cursor: pointer;
+}
+/* Щоб рожевий колір чекбокса працював у сучасних браузерах */
+.custom-checkbox input[type="checkbox"] {
+    accent-color: var(--accent-pink);
+    width: 16px;
+    height: 16px;
+}
