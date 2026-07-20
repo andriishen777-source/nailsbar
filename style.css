@@ -960,3 +960,35 @@ body.admin-mode-active #openCheckModalBtn { display: none; } /* Ховаємо �
     transform: scale(1.2);
     filter: brightness(1.2);
 }
+/* Кнопка додавання відгуку */
+.add-review-btn {
+    position: absolute;
+    top: -20px;
+    right: -20px;
+    padding: 12px 25px;
+    font-size: 1rem;
+    z-index: 10;
+    box-shadow: 0 5px 20px rgba(0,0,0,0.8);
+    border: 2px solid #1a1a1a;
+}
+@media (max-width: 600px) {
+    .add-review-btn {
+        top: -15px;
+        right: 0;
+        font-size: 0.9rem;
+        padding: 10px 15px;
+    }
+}
+/* Теги робочих годин */
+.time-tag {
+    background: #1a1a1a;
+    color: white;
+    border: 1px solid #444;
+    padding: 8px 15px;
+    border-radius: 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 0.9rem;
+    font-weight: bold;
+}

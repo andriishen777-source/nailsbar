@@ -1,140 +1,129 @@
-// Створюємо "спостерігача"
+// ==========================================
+// 1. АНІМАЦІЇ ТА СПОСТЕРІГАЧІ
+// ==========================================
 const observer = new IntersectionObserver((entries) => {
     entries.forEach((entry) => {
-        // Якщо елемент з'явився в зоні видимості екрану
         if (entry.isIntersecting) {
             entry.target.classList.add('show');
         }
     });
 });
+document.querySelectorAll('.hidden').forEach((el) => observer.observe(el));
 
-// Знаходимо всі елементи з класом .hidden
-const hiddenElements = document.querySelectorAll('.hidden');
-
-// Вішаємо на них спостерігача
-hiddenElements.forEach((el) => observer.observe(el));
-// --- ЛОГІКА МОДАЛЬНОГО ВІКНА ---
-const modal = document.getElementById("bookingModal");
-// Шукаємо всі кнопки на сайті, які мають відкривати запис (навігація + головний екран)
-const openBtns = document.querySelectorAll(".nav-btn, .cta-btn:not(.submit-btn)");
-const closeBtn = document.querySelector(".close-btn");
-
-// Відкрити модалку при кліку на будь-яку кнопку запису
-openBtns.forEach(btn => {
-    btn.addEventListener("click", () => {
-        modal.style.display = "flex"; // Використовуємо flex для центрування
+// ==========================================
+// 2. УНІВЕРСАЛЬНЕ ЗАКРИТТЯ ВІКОН
+// ==========================================
+document.querySelectorAll(".close-btn, .close-calendar-btn, .close-check-btn, .close-cabinet-btn, .close-reviews-btn, .close-cert-btn").forEach(btn => {
+    btn.addEventListener("click", function() {
+        const parentModal = this.closest(".modal");
+        if (parentModal) parentModal.style.display = "none";
     });
 });
 
-// Закрити модалку при кліку на хрестик
-closeBtn.addEventListener("click", () => {
-    modal.style.display = "none";
-});
-
-// Закрити модалку при кліку мишкою повз вікно (по темному фону)
+// Закриття по кліку на темний фон
 window.addEventListener("click", (event) => {
-    if (event.target === modal) {
-        modal.style.display = "none";
+    if (event.target.classList && event.target.classList.contains("modal")) {
+        event.target.style.display = "none";
     }
 });
 
-// --- ІНІЦІАЛІЗАЦІЯ БАЗИ ДАНИХ SUPABASE ---
+// ==========================================
+// 3. ВІДКРИТТЯ ФОРМИ ЗАПИСУ (ФІКС КНОПОК)
+// ==========================================
+const bookingModal = document.getElementById("bookingModal");
+// Шукаємо ТІЛЬКИ правильні кнопки: остання в меню, на головному екрані, та в модалці перевірки
+const openBtns = document.querySelectorAll(".navbar .nav-btn:last-child, .hero .cta-btn, #goToBookingBtn, #goToBookingBtnFromCheck, #goToBookingBtnFromCheck2");
+
+openBtns.forEach(btn => {
+    if(btn) {
+        btn.addEventListener("click", () => {
+            // Якщо відкрита перевірка запису - ховаємо її
+            const checkModal = document.getElementById("checkBookingModal");
+            if (checkModal) checkModal.style.display = "none";
+            
+            if (bookingModal) bookingModal.style.display = "flex";
+        });
+    }
+});
+
+// ==========================================
+// 4. ІНІЦІАЛІЗАЦІЯ SUPABASE
+// ==========================================
 const supabaseUrl = 'https://bgmrbujrxdyhdnmgcevx.supabase.co'; 
 const supabaseKey = 'sb_publishable_t7QyH8dHNBBbFQGY_62oRA_CaA5vXa_'; 
-// Змінили назву на supabaseClient, щоб не було конфлікту!
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
-// --- ЛОГІКА ВІДПРАВКИ ЗАПИСУ В БАЗУ ---
-document.getElementById("bookingForm").addEventListener("submit", async function(e) {
-    e.preventDefault(); 
-    
-    // 1. Збираємо дані з полів
-    const name = document.getElementById("clientName").value.trim();
-    const phone = document.getElementById("clientPhone").value.trim();
-    const dateTime = document.getElementById("selectedDateTime").value;
-    const comment = document.getElementById("clientComment").value.trim();
-    
-    // 2. Збираємо вибрані послуги (галочки)
-    const selectedServices = [];
-    document.querySelectorAll('.modal-service-cb:checked').forEach(cb => {
-        selectedServices.push(cb.value);
-    });
+// ==========================================
+// 5. ВІДПРАВКА ЗАПИСУ ТА ТЕЛЕГРАМ
+// ==========================================
+const bookingForm = document.getElementById("bookingForm");
+if (bookingForm) {
+    bookingForm.addEventListener("submit", async function(e) {
+        e.preventDefault(); 
+        
+        const name = document.getElementById("clientName").value.trim();
+        const phone = document.getElementById("clientPhone").value.trim();
+        const dateTime = document.getElementById("selectedDateTime").value;
+        const comment = document.getElementById("clientComment").value.trim();
+        
+        const selectedServices = [];
+        document.querySelectorAll('.modal-service-cb:checked').forEach(cb => selectedServices.push(cb.value));
 
-    // Перевірки, щоб клієнтка не відправила порожню форму
-    if (selectedServices.length === 0) {
-        alert("Будь ласка, оберіть хоча б одну послугу!");
-        return;
-    }
-    if (!dateTime) {
-        alert("Будь ласка, оберіть дату та час!");
-        return;
-    }
+        if (selectedServices.length === 0) return alert("Будь ласка, оберіть хоча б одну послугу!");
+        if (!dateTime) return alert("Будь ласка, оберіть дату та час!");
 
-    // 3. Робимо кнопку "Завантаженням"
-    const submitBtn = document.querySelector("#bookingForm .submit-btn");
-    const originalText = submitBtn.innerText;
-    submitBtn.innerText = "Відправляємо... ⏳";
-    submitBtn.disabled = true;
+        const submitBtn = document.querySelector("#bookingForm .submit-btn");
+        const originalText = submitBtn.innerText;
+        submitBtn.innerText = "Відправляємо... ⏳";
+        submitBtn.disabled = true;
 
-    // 4. ВІДПРАВКА В SUPABASE (використовуємо нову назву supabaseClient)
-    const { data, error } = await supabaseClient
-        .from('bookings')
-        .insert([
-            { 
-                client_name: name, 
-                client_phone: phone, 
-                services: selectedServices.join(' | '),
-                booking_date: dateTime,
-                comment: comment
+        const { data, error } = await supabaseClient.from('bookings').insert([{ 
+            client_name: name, 
+            client_phone: phone, 
+            services: selectedServices.join(' | '),
+            booking_date: dateTime,
+            comment: comment
+        }]);
+
+        submitBtn.innerText = originalText;
+        submitBtn.disabled = false;
+
+        if (error) {
+            console.error("Помилка Supabase:", error);
+            alert("Ой, сталась помилка при записі 😔 Спробуйте ще раз.");
+        } else {
+            alert("✅ Ваш запис успішно підтверджено! Чекаємо на вас.");
+            
+            // Телеграм Бот
+            const botToken = '8826664279:AAGvZX59mOnuw1hKwa5tUtEZ2xkUWn1DFC4';
+            const chatId = '1366887003';
+            const tgMessage = `🔥 *НОВИЙ ЗАПИС!*\n\n👤 *Клієнт:* ${name}\n📞 *Телефон:* ${phone}\n📅 *Дата та час:* ${dateTime}\n💅 *Послуги:* ${selectedServices.join(', ')}\n💬 *Коментар:* ${comment || 'Немає'}`;
+            
+            try {
+                fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ chat_id: chatId, text: tgMessage, parse_mode: 'Markdown' })
+                });
+            } catch (err) { console.log("Помилка відправки в ТГ", err); }
+            
+            if(bookingModal) bookingModal.style.display = "none";
+            bookingForm.reset();
+            const calendarBtn = document.getElementById("openCalendarBtn");
+            if (calendarBtn) {
+                calendarBtn.innerText = "📅 Оберіть дату та час";
+                calendarBtn.style.color = "#aaa";
             }
-        ]);
-
-    // 5. Повертаємо кнопку в норму
-    submitBtn.innerText = originalText;
-    submitBtn.disabled = false;
-
-    // 6. Реакція на результат
-    if (error) {
-        console.error("Помилка Supabase:", error);
-        alert("Ой, сталась помилка при записі 😔 Спробуйте ще раз.");
-    } else {
-        // Успіх!
-        alert("✅ Ваш запис успішно підтверджено! Чекаємо на вас.");
-        // --- ВІДПРАВКА В TELEGRAM ---
-        // ⚠️ ЗАМІНИ ЦІ ДВА РЯДКИ НА СВОЇ ДАНІ!
-        const botToken = '8826664279:AAGvZX59mOnuw1hKwa5tUtEZ2xkUWn1DFC4';
-        const chatId = '1366887003';
-        
-        const tgMessage = `🔥 *НОВИЙ ЗАПИС!*\n\n👤 *Клієнт:* ${name}\n📞 *Телефон:* ${phone}\n📅 *Дата та час:* ${dateTime}\n💅 *Послуги:* ${selectedServices.join(', ')}\n💬 *Коментар:* ${comment || 'Немає'}`;
-        
-        try {
-            fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ 
-                    chat_id: chatId, 
-                    text: tgMessage,
-                    parse_mode: 'Markdown'
-                })
-            });
-        } catch (err) {
-            console.log("Помилка відправки в ТГ", err);
+            document.getElementById("selectedDateTime").value = "";
         }
-        // Очищаємо і закриваємо форму
-        document.getElementById("bookingModal").style.display = "none";
-        document.getElementById("bookingForm").reset();
-        
-        // Скидаємо кнопку календаря
-        const calendarBtn = document.getElementById("openCalendarBtn");
-        calendarBtn.innerText = "📅 Оберіть дату та час";
-        calendarBtn.style.color = "#aaa";
-        document.getElementById("selectedDateTime").value = "";
-    }
-});
-// --- ЛОГІКА КАЛЕНДАРЯ ---
+    });
+}
+
+// ==========================================
+// 6. КАЛЕНДАР (ЛОГІКА ТА ГЕНЕРАЦІЯ ДНІВ)
+// ==========================================
 const calendarModal = document.getElementById("calendarModal");
 const openCalendarBtn = document.getElementById("openCalendarBtn");
-const closeCalendarBtn = document.querySelector(".close-calendar-btn");
 const calendarDays = document.getElementById("calendarDays");
 const timeSlotsTitle = document.getElementById("timeSlotsTitle");
 const timeSlots = document.getElementById("timeSlots");
@@ -142,84 +131,84 @@ const selectedDateTimeInput = document.getElementById("selectedDateTime");
 const toast = document.getElementById("toast");
 
 let selectedDate = null;
+let navDate = new Date(); 
 
-// Відкриваємо календар
 if (openCalendarBtn && calendarModal) {
     openCalendarBtn.addEventListener("click", () => {
         calendarModal.style.display = "flex";
         generateDays(); 
     });
-} else {
-    console.log("Помилка: Не знайдено кнопку openCalendarBtn або вікно calendarModal");
 }
-
-// Закриваємо календар на хрестик
-if (closeCalendarBtn) {
-    closeCalendarBtn.addEventListener("click", () => {
-        calendarModal.style.display = "none";
-    });
-}
-
-// Закриваємо календар, якщо клікнути повз нього (по темному фону)
-window.addEventListener("click", (event) => {
-    if (event.target === calendarModal) {
-        calendarModal.style.display = "none";
-    }
-});
-
-// Генерація днів
-// --- ЛОГІКА ДИНАМІЧНОГО КАЛЕНДАРЯ ---
-let navDate = new Date(); // Змінна, яка пам'ятає, який місяць ми зараз дивимось
 
 const prevMonthBtn = document.getElementById("prevMonthBtn");
 const nextMonthBtn = document.getElementById("nextMonthBtn");
 
-// Функція генерації календаря для вибраного місяця
 function generateDays() {
+    if (!calendarDays) return;
     calendarDays.innerHTML = "";
-    timeSlots.style.display = "none";
-    timeSlotsTitle.style.display = "none";
+    
+    // --- 1. ДОДАЄМО НАЗВИ ДНІВ ТИЖНЯ НАД ЦИФРАМИ ---
+    const weekdays = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Нд'];
+    weekdays.forEach(day => {
+        let label = document.createElement("div");
+        label.innerText = day;
+        label.style.fontWeight = "bold";
+        label.style.color = "#E1306C"; // Рожевий акцентний колір
+        label.style.fontSize = "0.85rem";
+        label.style.textAlign = "center";
+        label.style.paddingBottom = "10px";
+        calendarDays.appendChild(label);
+    });
+
+    if(timeSlots) timeSlots.style.display = "none";
+    if(timeSlotsTitle) timeSlotsTitle.style.display = "none";
     
     const today = new Date();
     const year = navDate.getFullYear();
     const monthIndex = navDate.getMonth(); 
-
     const monthNames = ["Січень", "Лютий", "Березень", "Квітень", "Травень", "Червень", "Липень", "Серпень", "Вересень", "Жовтень", "Листопад", "Грудень"];
     
-    document.getElementById("currentMonthYear").innerText = `${monthNames[monthIndex]} ${year}`;
+    if(document.getElementById("currentMonthYear")) {
+        document.getElementById("currentMonthYear").innerText = `${monthNames[monthIndex]} ${year}`;
+    }
 
-    // Перевірка: чи дивимось ми поточний місяць реального часу?
     const isCurrentMonth = (year === today.getFullYear() && monthIndex === today.getMonth());
     
-    // Блокуємо кнопку "Назад", якщо це поточний місяць
-    if (isCurrentMonth) {
-        prevMonthBtn.classList.add("disabled");
-    } else {
-        prevMonthBtn.classList.remove("disabled");
+    if (prevMonthBtn) {
+        if (isCurrentMonth) prevMonthBtn.classList.add("disabled");
+        else prevMonthBtn.classList.remove("disabled");
     }
 
     const daysInMonth = new Date(year, monthIndex + 1, 0).getDate();
+    
+    // --- 2. ВИРАХОВУЄМО ПУСТІ КЛІТИНКИ ЗЛІВА ---
+    let firstDayOfMonth = new Date(year, monthIndex, 1).getDay();
+    // В JavaScript Неділя - це 0. Нам треба змістити, щоб Понеділок був першим.
+    let emptyDays = firstDayOfMonth === 0 ? 6 : firstDayOfMonth - 1;
 
-    // Беремо реальні вихідні, які ти задав у Кабінеті Адміністратора
+    // Малюємо невидимі пусті клітинки до 1-го числа
+    for (let j = 0; j < emptyDays; j++) {
+        let emptyDiv = document.createElement("div");
+        emptyDiv.style.visibility = "hidden"; 
+        calendarDays.appendChild(emptyDiv);
+    }
+
     let realVacations = JSON.parse(localStorage.getItem("adminVacations")) || [];
-    const fullyBookedDays = [10, 15]; // Демо-дні, де зайнято весь час
 
+    // --- 3. МАЛЮЄМО САМІ ДНІ ---
     for (let i = 1; i <= daysInMonth; i++) {
         let dayBtn = document.createElement("div");
         dayBtn.classList.add("day-box");
         dayBtn.innerText = i;
         
-        // Формуємо дату циклу у форматі YYYY-MM-DD (як зберігається в адмінці)
         let loopDateStr = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(i).padStart(2, '0')}`;
         
-        // Блокуємо дні: якщо минули, якщо адмін поставив вихідний, або якщо повністю зайнято
         if (isCurrentMonth && i < today.getDate()) {
             dayBtn.classList.add("disabled");
-        } else if (realVacations.includes(loopDateStr) || fullyBookedDays.includes(i)) {
+        } else if (realVacations.includes(loopDateStr)) {
             dayBtn.classList.add("disabled");
-            dayBtn.addEventListener("click", () => showToast("Цей день повністю зайнятий або вихідний!"));
+            dayBtn.addEventListener("click", () => showToast("Цей день є вихідним! 🌴"));
         } else {
-            // Нормальний, доступний день
             dayBtn.addEventListener("click", () => {
                 document.querySelectorAll(".day-box").forEach(el => el.classList.remove("selected"));
                 dayBtn.classList.add("selected");
@@ -231,12 +220,10 @@ function generateDays() {
                 showTimeSlots(i); 
             });
         }
-        
         calendarDays.appendChild(dayBtn);
     }
 }
 
-// Кліки по стрілочках місяця
 if(prevMonthBtn && nextMonthBtn) {
     prevMonthBtn.addEventListener("click", () => {
         if (!prevMonthBtn.classList.contains("disabled")) {
@@ -250,237 +237,310 @@ if(prevMonthBtn && nextMonthBtn) {
     });
 }
 
-// --- ІНТЕГРАЦІЯ ПРАЙСУ ТА ФОРМИ ЗАПИСУ ---
-const priceItems = document.querySelectorAll(".price-item");
-const modalServiceCheckboxes = document.querySelectorAll(".modal-service-cb");
-
-priceItems.forEach(item => {
-    item.addEventListener("click", () => {
-        // Отримуємо назву послуги, на яку клікнули
-        const clickedServiceName = item.querySelector(".price-name").innerText.trim();
-        
-        // Відкриваємо модалку запису
-        const bookingModal = document.getElementById("bookingModal");
-        if(bookingModal) bookingModal.style.display = "flex";
-
-        // Ставимо галочку навпроти відповідної послуги у віконці
-        modalServiceCheckboxes.forEach(cb => {
-            // Шукаємо, чи текст чекбокса містить частину назви з прайсу
-            if (clickedServiceName.includes(cb.value) || cb.value.includes(clickedServiceName)) {
-                cb.checked = true;
-            } else {
-                cb.checked = false; // Знімаємо галочки з інших
-            }
-        });
-    });
-});
-// Генерація годин
-function showTimeSlots() {
-    timeSlots.innerHTML = "";
+async function showTimeSlots(dayNumber) {
+    if (!timeSlots) return;
+    timeSlots.innerHTML = "Завантаження годин... ⏳";
     timeSlotsTitle.style.display = "block";
     timeSlots.style.display = "grid";
 
-    const hours = [
-        { time: "10:00", booked: false },
-        { time: "11:30", booked: true }, 
-        { time: "13:00", booked: false },
-        { time: "14:30", booked: true }, 
-        { time: "16:00", booked: false },
-        { time: "17:30", booked: false }
-    ];
+    const year = navDate.getFullYear();
+    const monthIndex = navDate.getMonth();
+    const dateObj = new Date(year, monthIndex, dayNumber);
+    const dayOfWeek = dateObj.getDay(); 
 
-    hours.forEach(slot => {
+    const dateString = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`;
+
+    let availableHours = [];
+    let freshSpecificSchedule = JSON.parse(localStorage.getItem("adminSpecificSchedule")) || {};
+    let freshWeeklySchedule = JSON.parse(localStorage.getItem("adminWeeklySchedule")) || {
+        1: ["10:00", "12:00", "14:00", "16:00"], 2: ["10:00", "12:00", "14:00", "16:00"],
+        3: ["10:00", "12:00", "14:00", "16:00"], 4: ["10:00", "12:00", "14:00", "16:00"],
+        5: ["10:00", "12:00", "14:00", "16:00"], 6: ["11:00", "13:00", "15:00"], 0: []
+    };
+
+    if (freshSpecificSchedule[dateString] && freshSpecificSchedule[dateString].length > 0) {
+        availableHours = freshSpecificSchedule[dateString];
+    } else {
+        availableHours = freshWeeklySchedule[dayOfWeek] || [];
+    }
+
+    if (availableHours.length === 0) {
+        timeSlots.innerHTML = "<p style='grid-column: span 3; text-align: center; color: #888;'>У цей день немає прийомів</p>";
+        return;
+    }
+
+    const { data: bookings } = await supabaseClient
+        .from('bookings')
+        .select('booking_date')
+        .like('booking_date', `${selectedDate}%`); 
+
+    const bookedTimes = bookings ? bookings.map(b => b.booking_date.split(', ')[1]) : [];
+    timeSlots.innerHTML = "";
+
+    availableHours.forEach(time => {
         let timeBtn = document.createElement("div");
         timeBtn.classList.add("time-box");
-        timeBtn.innerText = slot.time;
+        timeBtn.innerText = time;
 
-        if (slot.booked) {
+        if (bookedTimes.includes(time)) {
             timeBtn.classList.add("booked");
-            timeBtn.addEventListener("click", () => showToast());
+            timeBtn.addEventListener("click", () => showToast("Цей час вже заброньовано! 💖"));
         } else {
             timeBtn.classList.add("available");
             timeBtn.addEventListener("click", () => {
-                let finalSelection = `${selectedDate}, ${slot.time}`;
+                let finalSelection = `${selectedDate}, ${time}`;
                 openCalendarBtn.innerText = `📅 ${finalSelection}`;
                 openCalendarBtn.style.color = "white";
-                selectedDateTimeInput.value = finalSelection; // Записуємо у прихований інпут для бази даних
+                selectedDateTimeInput.value = finalSelection; 
                 calendarModal.style.display = "none";
             });
         }
-        
         timeSlots.appendChild(timeBtn);
     });
 }
 
-// Сповіщення
-function showToast() {
+function showToast(message) {
+    if (!toast) return;
+    toast.innerText = message || "Цей час вже заброньовано! 💖";
     toast.classList.add("show");
-    setTimeout(() => {
-        toast.classList.remove("show");
-    }, 3000);
+    setTimeout(() => toast.classList.remove("show"), 3000);
 }
-// --- ЛОГІКА КАРУСЕЛІ ВІДГУКІВ ---
-const reviewsModal = document.getElementById("reviewsModal");
-const openReviewsBtn = document.getElementById("openReviewsBtn");
-const closeReviewsBtn = document.querySelector(".close-reviews-btn");
-const carouselImage = document.getElementById("carouselImage");
-const prevBtn = document.querySelector(".prev-btn");
-const nextBtn = document.querySelector(".next-btn");
-const carouselCounter = document.getElementById("carouselCounter");
 
-// Демо-масив з фотографіями (у майбутньому вони будуть тягнутися з Supabase)
-const reviewImages = [
-    "https://images.unsplash.com/photo-1516975080661-46bfa33633ab?auto=format&fit=crop&q=80", 
-    "https://images.unsplash.com/photo-1519014816548-bf5fe059e98b?auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&q=80"
+// ==========================================
+// 7. ДИНАМІЧНИЙ ПРАЙС-ЛИСТ (КЛІЄНТ ТА АДМІН)
+// ==========================================
+const mainPriceList = document.getElementById("mainPriceList");
+const bookingServicesList = document.getElementById("bookingServicesList");
+const adminPriceTableBody = document.getElementById("adminPriceTableBody");
+const editPriceBtnHero = document.getElementById("editPriceBtnHero");
+
+// Базові послуги (якщо адмін ще нічого не міняв)
+const defaultServices = [
+    { id: 1, name: "Комплекс (Зняття + Манікюр + Покриття)", price: 650 },
+    { id: 2, name: "Зняття + Покриття", price: 650 },
+    { id: 3, name: "Манікюр + Покриття", price: 620 },
+    { id: 4, name: "Зняття + Манікюр", price: 550 },
+    { id: 5, name: "Однотонне покриття", price: 450 }
 ];
-let currentReviewIndex = 0;
 
-// Функція оновлення картинки
-function updateCarousel() {
-    carouselImage.src = reviewImages[currentReviewIndex];
-    carouselCounter.innerText = `${currentReviewIndex + 1} / ${reviewImages.length}`;
-}
+// Витягуємо прайс з пам'яті
+let activeServices = JSON.parse(localStorage.getItem("adminPriceList")) || defaultServices;
 
-// Відкриття каруселі
-if (openReviewsBtn && reviewsModal) {
-    openReviewsBtn.addEventListener("click", () => {
-        currentReviewIndex = 0; // Завжди починаємо з першого відгуку
-        updateCarousel();
-        reviewsModal.style.display = "flex";
+// Функція малювання прайсу для клієнтів (на головній та в модалці)
+function renderClientPriceList() {
+    if (mainPriceList) mainPriceList.innerHTML = "";
+    if (bookingServicesList) bookingServicesList.innerHTML = "";
+
+    activeServices.forEach((service, index) => {
+        // 1. Додаємо на головну сторінку
+        if (mainPriceList) {
+            let item = document.createElement("div");
+            item.className = "price-item hidden";
+            item.style.transitionDelay = `${index * 0.1}s`;
+            item.innerHTML = `
+                <div class="price-name">${service.name}</div>
+                <div class="price-value">${service.price} ₴</div>
+            `;
+            
+            // Логіка кліку по послузі (відкриває форму з галочкою)
+            item.addEventListener("click", () => {
+                const bookingModal = document.getElementById("bookingModal");
+                if (bookingModal) bookingModal.style.display = "flex";
+                
+                // Ставимо галочку
+                document.querySelectorAll(".modal-service-cb").forEach(cb => {
+                    cb.checked = (cb.value === service.name);
+                });
+            });
+            mainPriceList.appendChild(item);
+            
+            // Підключаємо анімацію появи
+            observer.observe(item);
+        }
+
+        // 2. Додаємо в форму запису (чекбокси)
+        if (bookingServicesList) {
+            bookingServicesList.innerHTML += `
+                <label class="custom-checkbox">
+                    <input type="checkbox" value="${service.name}" class="modal-service-cb"> 
+                    <span>${service.name} - ${service.price} ₴</span>
+                </label>
+            `;
+        }
     });
 }
 
-// Закриття каруселі
-if (closeReviewsBtn) {
-    closeReviewsBtn.addEventListener("click", () => {
-        reviewsModal.style.display = "none";
+// Запускаємо малювання при завантаженні сайту
+renderClientPriceList();
+
+// Відкриття кабінету по кнопці "Редагувати" на головній
+if (editPriceBtnHero) {
+    editPriceBtnHero.addEventListener("click", () => {
+        const adminCabinetModal = document.getElementById("adminCabinetModal");
+        if(adminCabinetModal) adminCabinetModal.style.display = "flex";
+        switchCabinetView('priceEditingView');
     });
 }
-window.addEventListener("click", (event) => {
-    if (event.target === reviewsModal) {
-        reviewsModal.style.display = "none";
+
+// --- ЛОГІКА РЕДАГУВАННЯ В КАБІНЕТІ ---
+function renderAdminPriceList() {
+    if (!adminPriceTableBody) return;
+    adminPriceTableBody.innerHTML = "";
+    
+    if (activeServices.length === 0) {
+        adminPriceTableBody.innerHTML = "<tr><td colspan='3' style='text-align:center;'>Список порожній</td></tr>";
+        return;
     }
-});
 
-// Кнопка Вперед
-nextBtn.addEventListener("click", () => {
-    // Якщо дійшли до кінця - перекидаємо на початок
-    currentReviewIndex = (currentReviewIndex + 1) % reviewImages.length;
-    updateCarousel();
-});
+    activeServices.forEach(service => {
+        let tr = document.createElement("tr");
+        tr.innerHTML = `
+            <td style="text-align: left;">${service.name}</td>
+            <td>${service.price} ₴</td>
+            <td><button class="delete-booking-btn" onclick="deleteService(${service.id})" title="Видалити послугу">❌</button></td>
+        `;
+        adminPriceTableBody.appendChild(tr);
+    });
+}
 
-// Кнопка Назад
-prevBtn.addEventListener("click", () => {
-    // Якщо дійшли до початку - перекидаємо в кінець
-    currentReviewIndex = (currentReviewIndex - 1 + reviewImages.length) % reviewImages.length;
-    updateCarousel();
-});
-// --- ЛОГІКА СЕРТИФІКАТІВ ---
-const certModal = document.getElementById("certModal");
-const fullCertImage = document.getElementById("fullCertImage");
-const closeCertBtn = document.querySelector(".close-cert-btn");
+// Додавання нової послуги
+const addNewServiceBtn = document.getElementById("addNewServiceBtn");
+if (addNewServiceBtn) {
+    addNewServiceBtn.addEventListener("click", () => {
+        const nameInput = document.getElementById("newServiceName");
+        const priceInput = document.getElementById("newServicePrice");
+        
+        const name = nameInput.value.trim();
+        const price = parseInt(priceInput.value);
 
-// Ця функція викликається прямо з HTML (onclick)
-window.openCert = function(imageSrc) {
-    fullCertImage.src = imageSrc;
-    certModal.style.display = "flex";
+        if (!name || isNaN(price)) return alert("Будь ласка, введіть коректну назву та ціну!");
+
+        const newId = activeServices.length > 0 ? Math.max(...activeServices.map(s => s.id)) + 1 : 1;
+        
+        activeServices.push({ id: newId, name: name, price: price });
+        localStorage.setItem("adminPriceList", JSON.stringify(activeServices));
+        
+        nameInput.value = "";
+        priceInput.value = "";
+        
+        renderAdminPriceList(); // Оновлюємо таблицю адміна
+        renderClientPriceList(); // ОДРАЗУ оновлюємо прайс клієнта на сайті
+    });
+}
+
+// Видалення послуги
+window.deleteService = function(id) {
+    if (confirm("Ви дійсно хочете видалити цю послугу з прайсу?")) {
+        activeServices = activeServices.filter(s => s.id !== id);
+        localStorage.setItem("adminPriceList", JSON.stringify(activeServices));
+        renderAdminPriceList();
+        renderClientPriceList();
+    }
 };
 
-// Закриваємо модалку сертифіката
-if (closeCertBtn) {
-    closeCertBtn.addEventListener("click", () => {
-        certModal.style.display = "none";
-    });
-}
-
-// Закриття по кліку на темний фон
-window.addEventListener("click", (event) => {
-    if (event.target === certModal) {
-        certModal.style.display = "none";
-    }
-});
-// --- ЛОГІКА ПЕРЕВІРКИ ЗАПИСУ ТА АДМІН-ПАНЕЛІ ---
+// ==========================================
+// 8. ПЕРЕВІРКА ЗАПИСУ (КЛІЄНТИ)
+// ==========================================
 const checkBookingModal = document.getElementById("checkBookingModal");
 const openCheckModalBtn = document.getElementById("openCheckModalBtn");
-const closeCheckBtn = document.querySelector(".close-check-btn");
 const verifyPhoneBtn = document.getElementById("verifyPhoneBtn");
 const checkPhoneInput = document.getElementById("checkPhoneInput");
-
 const checkPhoneSection = document.getElementById("checkPhoneSection");
 const adminLoginSection = document.getElementById("adminLoginSection");
 const checkResultSection = document.getElementById("checkResultSection");
-const goToBookingBtn = document.getElementById("goToBookingBtn");
 
-// Відкрити вікно перевірки
 if (openCheckModalBtn) {
     openCheckModalBtn.addEventListener("click", () => {
-        // Скидаємо вікно до початкового стану
-        checkPhoneSection.style.display = "block";
-        adminLoginSection.style.display = "none";
-        checkResultSection.style.display = "none";
-        checkPhoneInput.value = "";
+        if(checkPhoneSection) checkPhoneSection.style.display = "block";
+        if(adminLoginSection) adminLoginSection.style.display = "none";
+        if(checkResultSection) checkResultSection.style.display = "none";
+        if(checkPhoneInput) checkPhoneInput.value = "";
+        if(checkBookingModal) checkBookingModal.style.display = "flex";
+    });
+}
+
+if (verifyPhoneBtn) {
+    verifyPhoneBtn.addEventListener("click", async () => {
+        const phone = checkPhoneInput.value.replace(/\D/g, ''); 
+        if (!phone) return alert("Будь ласка, введіть номер телефону!");
         
-        checkBookingModal.style.display = "flex";
+        if(checkPhoneSection) checkPhoneSection.style.display = "none"; 
+
+        if (phone === "0680011001") {
+            if(adminLoginSection) adminLoginSection.style.display = "block"; 
+            return;
+        }
+
+        verifyPhoneBtn.innerText = "Шукаємо... ⏳";
+        const { data: userBookings, error } = await supabaseClient
+            .from('bookings')
+            .select('*')
+            .eq('client_phone', phone)
+            .order('created_at', { ascending: false }); 
+        verifyPhoneBtn.innerText = "Знайти запис";
+
+        if (error) {
+            console.error("Помилка пошуку:", error);
+            alert("Ой, сталась помилка при пошуку бази 😔");
+            if(checkPhoneSection) checkPhoneSection.style.display = "block";
+            return;
+        }
+
+        if(checkResultSection) {
+            checkResultSection.innerHTML = ""; 
+            if (userBookings && userBookings.length > 0) {
+                let html = `<h3 style="color: var(--accent-pink); margin-bottom: 15px;">Ваші записи:</h3>`;
+                userBookings.forEach(b => {
+                    html += `
+                        <div style="background: #1a1a1a; padding: 15px; border-radius: 8px; margin-bottom: 10px; border: 1px solid #333; text-align: left;">
+                            <p style="color: white; margin-bottom: 5px;"><strong>📅 Дата:</strong> ${b.booking_date}</p>
+                            <p style="color: #aaa; font-size: 0.9rem; margin-bottom: 5px;"><strong>💅 Послуги:</strong> ${b.services}</p>
+                            <p style="color: #888; font-size: 0.85rem;"><strong>Статус:</strong> Підтверджено ✅</p>
+                        </div>
+                    `;
+                });
+                html += `<button class="cta-btn" onclick="document.getElementById('checkBookingModal').style.display='none'" style="margin-top: 15px; width: 100%;">Добре, дякую</button>`;
+                checkResultSection.innerHTML = html;
+            } else {
+                checkResultSection.innerHTML = `
+                    <h3 style="color: white; margin-bottom: 15px;">Записів не знайдено 😔</h3>
+                    <p style="color: #888; margin-bottom: 20px;">За номером ${phone} немає активних записів.</p>
+                    <button class="cta-btn" id="goToBookingBtnFromCheck2" style="width: 100%;">Записатися зараз</button>
+                `;
+                document.getElementById("goToBookingBtnFromCheck2").addEventListener("click", () => {
+                    checkBookingModal.style.display = "none";
+                    if(bookingModal) bookingModal.style.display = "flex";
+                });
+            }
+            checkResultSection.style.display = "block";
+        }
     });
 }
 
-// Закрити вікно перевірки
-if (closeCheckBtn) {
-    closeCheckBtn.addEventListener("click", () => {
-        checkBookingModal.style.display = "none";
-    });
-}
-
-// Логіка кнопки "Знайти запис"
-verifyPhoneBtn.addEventListener("click", () => {
-    const phone = checkPhoneInput.value.replace(/\D/g, ''); // Залишаємо тільки цифри
-    
-    checkPhoneSection.style.display = "none"; // Ховаємо поле вводу телефону
-
-    // ТУТ БУДЕ ЗАПИТ ДО SUPABASE. 
-    // Поки що робимо перевірку: якщо номер адмінський
-    if (phone === "0680011001") {
-        adminLoginSection.style.display = "block"; // Показуємо поле для пароля
-    } else {
-        // Якщо звичайний клієнт (імпровізація, що запису нема)
-        checkResultSection.style.display = "block";
-    }
-});
-
-// Кнопка "Записатися зараз" (з вікна помилки)
-goToBookingBtn.addEventListener("click", () => {
-    checkBookingModal.style.display = "none";
-    document.getElementById("bookingModal").style.display = "flex"; // Відкриваємо форму запису
-});
-// --- ЛОГІКА ВХОДУ ТА КАБІНЕТУ АДМІНІСТРАТОРА ---
+// ==========================================
+// 9. АДМІН-ПАНЕЛЬ (ВХІД ТА КАБІНЕТ)
+// ==========================================
 const loginAdminBtn = document.getElementById("loginAdminBtn");
 const adminPasswordInput = document.getElementById("adminPasswordInput");
 const adminCabinetBtn = document.getElementById("adminCabinetBtn");
 const adminCabinetModal = document.getElementById("adminCabinetModal");
-const closeCabinetBtn = document.querySelector(".close-cabinet-btn");
-const adminSearchInput = document.getElementById("adminSearchInput");
+const adminLogoutBtn = document.getElementById("adminLogoutBtn");
 
-// Перевіряємо при завантаженні сайту, чи не залогінились ми раніше
 if (localStorage.getItem("isAdmin") === "true") {
     document.body.classList.add("admin-mode-active");
 }
 
-// 1. АВТОРИЗАЦІЯ
 if (loginAdminBtn) {
     loginAdminBtn.addEventListener("click", () => {
         const phone = document.getElementById("checkPhoneInput").value.replace(/\D/g, '');
-        const password = adminPasswordInput.value;
+        const password = adminPasswordInput ? adminPasswordInput.value : "";
         
         loginAdminBtn.innerText = "Перевірка...";
-        
         if (phone === "0680011001" && password === "lviv_avokado2007") {
-            // УСПІХ! Вмикаємо режим адміна
             document.body.classList.add("admin-mode-active");
-            localStorage.setItem("isAdmin", "true"); // Запам'ятовуємо в браузері
-            
+            localStorage.setItem("isAdmin", "true"); 
             alert("✅ Вітаємо в панелі управління, Бос!");
-            document.getElementById("checkBookingModal").style.display = "none";
+            if(checkBookingModal) checkBookingModal.style.display = "none";
         } else {
             alert("❌ Невірний пароль!");
         }
@@ -488,49 +548,44 @@ if (loginAdminBtn) {
     });
 }
 
-// 2. ВІДКРИТТЯ КАБІНЕТУ ТА ЗАВАНТАЖЕННЯ ДАНИХ
+if (adminLogoutBtn) {
+    adminLogoutBtn.addEventListener("click", () => {
+        document.body.classList.remove("admin-mode-active");
+        localStorage.removeItem("isAdmin"); 
+        if(adminCabinetModal) adminCabinetModal.style.display = "none";
+        alert("Ви успішно вийшли з адміністративного акаунта.");
+    });
+}
+
 if (adminCabinetBtn) {
     adminCabinetBtn.addEventListener("click", () => {
-        adminCabinetModal.style.display = "flex";
-        loadAdminData();
-    });
-}
-if (closeCabinetBtn) {
-    closeCabinetBtn.addEventListener("click", () => adminCabinetModal.style.display = "none");
-}
-
-// 3. ФУНКЦІЯ ГЕНЕРАЦІЇ БАЗИ КЛІЄНТІВ
-// --- ФУНКЦІЯ НАВІГАЦІЇ ПО КАБІНЕТУ (КОРИДОР) ---
-function switchCabinetView(viewId) {
-    // Ховаємо всі секції
-    const views = ['cabinetMenuSection', 'upcomingBookingsView', 'clientDatabaseView', 'scheduleEditingView'];
-    views.forEach(id => {
-        document.getElementById(id).style.display = 'none';
-    });
-    // Показуємо потрібну
-    document.getElementById(viewId).style.display = 'block';
-
-    // Якщо відкриваємо списки - оновлюємо дані з бази
-    if (viewId === 'upcomingBookingsView' || viewId === 'clientDatabaseView') {
-        loadAdminData();
-    }
-}
-
-// При відкритті кабінету завжди показуємо коридор
-if (adminCabinetBtn) {
-    adminCabinetBtn.addEventListener("click", () => {
-        adminCabinetModal.style.display = "flex";
-        switchCabinetView('cabinetMenuSection'); // Відкриваємо коридор
+        if(adminCabinetModal) adminCabinetModal.style.display = "flex";
+        switchCabinetView('cabinetMenuSection'); 
     });
 }
 
-// --- ФУНКЦІЯ ЗАВАНТАЖЕННЯ ДАНИХ (ДЛЯ ОБОХ ТАБЛИЦЬ) ---
+window.switchCabinetView = function(viewId) {
+    ['cabinetMenuSection', 'upcomingBookingsView', 'clientDatabaseView', 'scheduleEditingView', 'priceEditingView', 'certificatesEditingView', 'masterProfileEditingView'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.style.display = 'none';
+    });
+    const activeView = document.getElementById(viewId);
+    if(activeView) activeView.style.display = 'block';
+
+    if (viewId === 'upcomingBookingsView' || viewId === 'clientDatabaseView') loadAdminData();
+    if (viewId === 'priceEditingView') renderAdminPriceList();
+    if (viewId === 'certificatesEditingView') renderAdminCerts();
+    if (viewId === 'masterProfileEditingView') renderAdminMasterProfile(); // НОВИЙ РЯДОК
+};
+// ==========================================
+// 10. АДМІН-ПАНЕЛЬ (БАЗА ТА ЗАПИСИ)
+// ==========================================
 async function loadAdminData() {
     const adminTbody = document.getElementById("adminTableBody");
     const upcomingTbody = document.getElementById("upcomingTableBody");
     
-    adminTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Завантаження даних... ⏳</td></tr>";
-    upcomingTbody.innerHTML = "<tr><td colspan='4' style='text-align:center;'>Завантаження записів... ⏳</td></tr>";
+    if(adminTbody) adminTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Завантаження даних... ⏳</td></tr>";
+    if(upcomingTbody) upcomingTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Завантаження записів... ⏳</td></tr>";
     
     const { data: bookings, error } = await supabaseClient
         .from('bookings')
@@ -538,11 +593,10 @@ async function loadAdminData() {
         .order('created_at', { ascending: false });
         
     if (error) {
-        adminTbody.innerHTML = "<tr><td colspan='5' style='text-align:center; color:red;'>Помилка підключення до бази</td></tr>";
+        if(adminTbody) adminTbody.innerHTML = "<tr><td colspan='5' style='text-align:center; color:red;'>Помилка підключення до бази</td></tr>";
         return;
     }
 
-    // --- ЛОГІКА ДЛЯ БАЗИ КЛІЄНТІВ ---
     const clients = {};
     bookings.forEach(b => {
         if (!clients[b.client_phone]) {
@@ -552,50 +606,51 @@ async function loadAdminData() {
     });
 
     const clientArray = Object.values(clients);
-    document.getElementById("totalClientsCount").innerText = clientArray.length;
-    document.getElementById("totalBookingsCount").innerText = bookings.length;
+    if(document.getElementById("totalClientsCount")) document.getElementById("totalClientsCount").innerText = clientArray.length;
+    if(document.getElementById("totalBookingsCount")) document.getElementById("totalBookingsCount").innerText = bookings.length;
 
     renderAdminTable(clientArray);
 
-    // Додаємо пошук по клієнтах
+    const adminSearchInput = document.getElementById("adminSearchInput");
     if(adminSearchInput) {
-        adminSearchInput.addEventListener("input", (e) => {
+        // Щоб уникнути дублювання подій, робимо це так:
+        adminSearchInput.oninput = (e) => {
             const term = e.target.value.toLowerCase();
             const filtered = clientArray.filter(c => c.name.toLowerCase().includes(term) || c.phone.includes(term));
             renderAdminTable(filtered);
-        });
+        };
     }
 
-    // --- ЛОГІКА ДЛЯ МАЙБУТНІХ ЗАПИСІВ (ТА СЬОГОДНІ) ---
-    upcomingTbody.innerHTML = "";
-    
-    const today = new Date();
-    const monthNames = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
-    const todayStr = `${today.getDate()} ${monthNames[today.getMonth()]}`;
+    if (upcomingTbody) {
+        upcomingTbody.innerHTML = "";
+        const today = new Date();
+        const monthNames = ["січня", "лютого", "березня", "квітня", "травня", "червня", "липня", "серпня", "вересня", "жовтня", "листопада", "грудня"];
+        const todayStr = `${today.getDate()} ${monthNames[today.getMonth()]}`;
 
-    if (bookings.length === 0) {
-        // Змінили colspan на 5, бо тепер 5 колонок
-        upcomingTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Записів ще немає</td></tr>";
-    } else {
-        bookings.forEach(b => {
-            let tr = document.createElement("tr");
-            
-            const isToday = b.booking_date.includes(todayStr);
-            if (isToday) tr.classList.add("today-booking");
-            
-            tr.innerHTML = `
-                <td>${b.client_name} ${isToday ? '<span class="today-badge">СЬОГОДНІ</span>' : ''}</td>
-                <td>${b.client_phone}</td>
-                <td>${b.booking_date}</td>
-                <td style="font-size: 0.85rem; color: #aaa;">${b.services}</td>
-                <td><button class="delete-booking-btn" onclick="deleteBooking('${b.id}')" title="Скасувати запис">❌</button></td>
-            `;
-            upcomingTbody.appendChild(tr);
-        });
+        if (bookings.length === 0) {
+            upcomingTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Записів ще немає</td></tr>";
+        } else {
+            bookings.forEach(b => {
+                let tr = document.createElement("tr");
+                const isToday = b.booking_date.includes(todayStr);
+                if (isToday) tr.classList.add("today-booking");
+                
+                tr.innerHTML = `
+                    <td>${b.client_name} ${isToday ? '<span class="today-badge">СЬОГОДНІ</span>' : ''}</td>
+                    <td>${b.client_phone}</td>
+                    <td>${b.booking_date}</td>
+                    <td style="font-size: 0.85rem; color: #aaa;">${b.services}</td>
+                    <td><button class="delete-booking-btn" onclick="deleteBooking('${b.id}')" title="Скасувати запис">❌</button></td>
+                `;
+                upcomingTbody.appendChild(tr);
+            });
+        }
     }
+}
 
 function renderAdminTable(dataArray) {
     const tbody = document.getElementById("adminTableBody");
+    if(!tbody) return;
     tbody.innerHTML = "";
     if (dataArray.length === 0) {
         tbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Нічого не знайдено</td></tr>";
@@ -613,103 +668,662 @@ function renderAdminTable(dataArray) {
         tbody.appendChild(tr);
     });
 }
-// --- ЛОГІКА ВИХОДУ ---
-const adminLogoutBtn = document.getElementById("adminLogoutBtn");
-if (adminLogoutBtn) {
-    adminLogoutBtn.addEventListener("click", () => {
-        document.body.classList.remove("admin-mode-active");
-        localStorage.removeItem("isAdmin"); // Стирання пам'яті браузера
-        
-        // Закриваємо кабінет, якщо він був відкритий
-        document.getElementById("adminCabinetModal").style.display = "none";
-        
-        alert("Ви успішно вийшли з адміністративного акаунта.");
-    });
-}
-// --- ЛОГІКА РЕДАКТОРА ГРАФІКА ---
+
+window.deleteBooking = async function(bookingId) {
+    const isConfirmed = confirm("Ви впевнені, що хочете скасувати цей запис? Відмінити цю дію буде неможливо.");
+    if (isConfirmed) {
+        const { error } = await supabaseClient.from('bookings').delete().eq('id', bookingId);
+        if (error) {
+            console.error("Помилка видалення:", error);
+            alert("Сталася помилка при видаленні 😔 Спробуйте ще раз.");
+        } else {
+            alert("✅ Запис успішно скасовано!");
+            loadAdminData();
+        }
+    }
+};
+
+// ==========================================
+// 11. АДМІН-ПАНЕЛЬ (РЕДАГУВАННЯ ГРАФІКА)
+// ==========================================
+// 11.1 Вихідні
 const vacationDateInput = document.getElementById("vacationDateInput");
 const addVacationBtn = document.getElementById("addVacationBtn");
 const vacationTagsContainer = document.getElementById("vacationTagsContainer");
-
-// Витягуємо збережені вихідні з пам'яті браузера (або створюємо порожній масив)
 let savedVacations = JSON.parse(localStorage.getItem("adminVacations")) || [];
 
-// Функція малювання тегів
 function renderVacationTags() {
+    if(!vacationTagsContainer) return;
     vacationTagsContainer.innerHTML = "";
     if (savedVacations.length === 0) {
         vacationTagsContainer.innerHTML = "<span style='color: #555;'>Немає запланованих вихідних</span>";
         return;
     }
-    
-    // Сортуємо дати за порядком
     savedVacations.sort();
-
     savedVacations.forEach(date => {
         let tag = document.createElement("div");
         tag.classList.add("vacation-tag");
-        // Перетворюємо 2026-07-25 у красивий формат 25.07.2026
         const [y, m, d] = date.split('-');
-        tag.innerHTML = `
-            ${d}.${m}.${y}
-            <button class="delete-tag-btn" onclick="removeVacation('${date}')">&times;</button>
-        `;
+        tag.innerHTML = `${d}.${m}.${y} <button class="delete-tag-btn" onclick="removeVacation('${date}')">&times;</button>`;
         vacationTagsContainer.appendChild(tag);
     });
 }
 
-// Додавання вихідного
 if (addVacationBtn) {
     addVacationBtn.addEventListener("click", () => {
         const selectedDate = vacationDateInput.value;
         if (!selectedDate) return alert("Оберіть дату!");
-        
         if (!savedVacations.includes(selectedDate)) {
             savedVacations.push(selectedDate);
             localStorage.setItem("adminVacations", JSON.stringify(savedVacations));
             renderVacationTags();
-            vacationDateInput.value = ""; // Очищаємо інпут
-            
-            // Одразу оновлюємо головний календар клієнтів!
-            if(document.getElementById("calendarModal").style.display === "flex") {
-                generateDays(); 
-            }
+            if(vacationDateInput) vacationDateInput.value = ""; 
+            if(calendarModal && calendarModal.style.display === "flex") generateDays(); 
         } else {
             alert("Цей день вже відмічено як вихідний!");
         }
     });
 }
 
-// Видалення вихідного
 window.removeVacation = function(dateToRemove) {
     savedVacations = savedVacations.filter(date => date !== dateToRemove);
     localStorage.setItem("adminVacations", JSON.stringify(savedVacations));
     renderVacationTags();
-    generateDays(); // Оновлюємо календар клієнтів
+    if(calendarModal && calendarModal.style.display === "flex") generateDays(); 
+};
+renderVacationTags();
+
+// 11.2 Тижневий Графік
+const dayOfWeekSelect = document.getElementById("dayOfWeekSelect");
+const timeSlotInput = document.getElementById("timeSlotInput");
+const addTimeSlotBtn = document.getElementById("addTimeSlotBtn");
+const timeTagsContainer = document.getElementById("timeTagsContainer");
+let defaultSchedule = {
+    1: ["10:00", "12:00", "14:00", "16:00"], 2: ["10:00", "12:00", "14:00", "16:00"],
+    3: ["10:00", "12:00", "14:00", "16:00"], 4: ["10:00", "12:00", "14:00", "16:00"],
+    5: ["10:00", "12:00", "14:00", "16:00"], 6: ["11:00", "13:00", "15:00"], 0: []
+};
+let weeklySchedule = JSON.parse(localStorage.getItem("adminWeeklySchedule")) || defaultSchedule;
+
+function renderTimeTags() {
+    if (!timeTagsContainer || !dayOfWeekSelect) return;
+    const selectedDay = dayOfWeekSelect.value;
+    const times = weeklySchedule[selectedDay] || [];
+    timeTagsContainer.innerHTML = "";
+    if (times.length === 0) {
+        timeTagsContainer.innerHTML = "<span style='color: #555;'>У цей день немає прийомів (Вихідний)</span>";
+        return;
+    }
+    times.sort();
+    times.forEach(time => {
+        let tag = document.createElement("div");
+        tag.classList.add("time-tag");
+        tag.innerHTML = `${time} <button class="delete-tag-btn" onclick="removeTimeSlot('${selectedDay}', '${time}')" style="color:#888;">&times;</button>`;
+        timeTagsContainer.appendChild(tag);
+    });
+}
+
+if (dayOfWeekSelect) dayOfWeekSelect.addEventListener("change", renderTimeTags);
+if (addTimeSlotBtn) {
+    addTimeSlotBtn.addEventListener("click", () => {
+        const selectedDay = dayOfWeekSelect.value;
+        const newTime = timeSlotInput.value;
+        if (!newTime) return alert("Оберіть час!");
+        if (!weeklySchedule[selectedDay].includes(newTime)) {
+            weeklySchedule[selectedDay].push(newTime);
+            localStorage.setItem("adminWeeklySchedule", JSON.stringify(weeklySchedule));
+            renderTimeTags();
+            if(timeSlotInput) timeSlotInput.value = "";
+        } else {
+            alert("Цей час вже є у графіку на цей день!");
+        }
+    });
+}
+window.removeTimeSlot = function(day, timeToRemove) {
+    weeklySchedule[day] = weeklySchedule[day].filter(time => time !== timeToRemove);
+    localStorage.setItem("adminWeeklySchedule", JSON.stringify(weeklySchedule));
+    renderTimeTags();
+};
+renderTimeTags();
+
+// 11.3 Особливий Графік на Дату
+const specificDateInput = document.getElementById("specificDateInput");
+const specificTimeInput = document.getElementById("specificTimeInput");
+const addSpecificTimeBtn = document.getElementById("addSpecificTimeBtn");
+const specificTimeTagsContainer = document.getElementById("specificTimeTagsContainer");
+let specificSchedule = JSON.parse(localStorage.getItem("adminSpecificSchedule")) || {};
+
+function renderSpecificTimeTags() {
+    if (!specificTimeTagsContainer || !specificDateInput) return;
+    const selectedDate = specificDateInput.value;
+    if (!selectedDate) {
+        specificTimeTagsContainer.innerHTML = "<span style='color: #555;'>Оберіть дату, щоб побачити або змінити її години</span>";
+        return;
+    }
+    const times = specificSchedule[selectedDate] || [];
+    specificTimeTagsContainer.innerHTML = "";
+    if (times.length === 0) {
+        specificTimeTagsContainer.innerHTML = "<span style='color: #555;'>Немає особливих годин. Буде діяти стандартний тижневий графік.</span>";
+        return;
+    }
+    times.sort();
+    times.forEach(time => {
+        let tag = document.createElement("div");
+        tag.classList.add("time-tag");
+        tag.innerHTML = `${time} <button class="delete-tag-btn" onclick="removeSpecificTimeSlot('${selectedDate}', '${time}')" style="color:#888;">&times;</button>`;
+        specificTimeTagsContainer.appendChild(tag);
+    });
+}
+
+if (specificDateInput) specificDateInput.addEventListener("change", renderSpecificTimeTags);
+if (addSpecificTimeBtn) {
+    addSpecificTimeBtn.addEventListener("click", () => {
+        const date = specificDateInput.value;
+        const time = specificTimeInput.value;
+        if (!date || !time) return alert("Оберіть дату та час!");
+        if (!specificSchedule[date]) specificSchedule[date] = [];
+        if (!specificSchedule[date].includes(time)) {
+            specificSchedule[date].push(time);
+            localStorage.setItem("adminSpecificSchedule", JSON.stringify(specificSchedule));
+            renderSpecificTimeTags();
+            if(specificTimeInput) specificTimeInput.value = "";
+        } else {
+            alert("Цей час вже додано на цю дату!");
+        }
+    });
+}
+window.removeSpecificTimeSlot = function(date, timeToRemove) {
+    specificSchedule[date] = specificSchedule[date].filter(time => time !== timeToRemove);
+    if (specificSchedule[date].length === 0) delete specificSchedule[date]; 
+    localStorage.setItem("adminSpecificSchedule", JSON.stringify(specificSchedule));
+    renderSpecificTimeTags();
 };
 
-// Запускаємо малювання тегів при завантаженні
-renderVacationTags();
+// ==========================================
+// 12. ВІДГУКИ (КАРУСЕЛЬ ТА ЗАВАНТАЖЕННЯ)
+// ==========================================
+const reviewsModal = document.getElementById("reviewsModal");
+const openReviewsBtn = document.getElementById("openReviewsBtn");
+const carouselImage = document.getElementById("carouselImage");
+const prevBtn = document.querySelector(".prev-btn");
+const nextBtn = document.querySelector(".next-btn");
+const carouselCounter = document.getElementById("carouselCounter");
+
+let currentReviewIndex = 0;
+let reviewImages = []; 
+
+async function loadReviewsFromDB() {
+    const { data, error } = await supabaseClient
+        .from('reviews')
+        .select('image_data')
+        .order('created_at', { ascending: false }); 
+
+    if (data && data.length > 0) {
+        reviewImages = data.map(item => item.image_data);
+    } else {
+        reviewImages = ["https://images.unsplash.com/photo-1522337660859-02fbefca4702?auto=format&fit=crop&q=80"];
+    }
+    updateCarousel();
 }
-// --- ФУНКЦІЯ ВИДАЛЕННЯ ЗАПИСУ З БАЗИ ---
-window.deleteBooking = async function(bookingId) {
-    // Питаємо підтвердження
-    const isConfirmed = confirm("Ви впевнені, що хочете скасувати цей запис? Відмінити цю дію буде неможливо.");
-    
-    if (isConfirmed) {
-        // Запускаємо видалення з бази Supabase по унікальному ID запису
-        const { error } = await supabaseClient
-            .from('bookings')
-            .delete()
-            .eq('id', bookingId);
-            
-        if (error) {
-            console.error("Помилка видалення:", error);
-            alert("Сталася помилка при видаленні 😔 Спробуйте ще раз.");
-        } else {
-            alert("✅ Запис успішно скасовано!");
-            // Одразу перезавантажуємо таблиці, щоб запис зник з екрану
-            loadAdminData();
+loadReviewsFromDB();
+
+const reviewFileInput = document.getElementById('reviewFileInput');
+if (reviewFileInput) {
+    reviewFileInput.addEventListener('change', function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = async function() {
+                const canvas = document.createElement('canvas');
+                const ctx = canvas.getContext('2d');
+                const TARGET_WIDTH = 800;
+                const TARGET_HEIGHT = 1000;
+                canvas.width = TARGET_WIDTH;
+                canvas.height = TARGET_HEIGHT;
+
+                let srcX = 0, srcY = 0, srcWidth = img.width, srcHeight = img.height;
+                const targetRatio = TARGET_WIDTH / TARGET_HEIGHT;
+                const imgRatio = img.width / img.height;
+
+                if (imgRatio > targetRatio) {
+                    srcWidth = img.height * targetRatio;
+                    srcX = (img.width - srcWidth) / 2;
+                } else {
+                    srcHeight = img.width / targetRatio;
+                    srcY = (img.height - srcHeight) / 2;
+                }
+                ctx.drawImage(img, srcX, srcY, srcWidth, srcHeight, 0, 0, TARGET_WIDTH, TARGET_HEIGHT);
+                const base64Image = canvas.toDataURL('image/jpeg', 0.8);
+                
+                const btn = document.querySelector('.add-review-btn');
+                if(btn) btn.innerText = "Завантажуємо... ⏳";
+                
+                const { error } = await supabaseClient.from('reviews').insert([{ image_data: base64Image }]);
+                
+                if(btn) btn.innerText = "📸 Додати відгук";
+                if (error) {
+                    alert("Помилка завантаження 😔");
+                    console.error(error);
+                } else {
+                    alert("✅ Відгук успішно додано!");
+                    loadReviewsFromDB(); 
+                }
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+function updateCarousel() {
+    if(carouselImage && reviewImages.length > 0) {
+        carouselImage.src = reviewImages[currentReviewIndex];
+        if(carouselCounter) carouselCounter.innerText = `${currentReviewIndex + 1} / ${reviewImages.length}`;
+    }
+}
+
+if (openReviewsBtn && reviewsModal) {
+    openReviewsBtn.addEventListener("click", () => {
+        currentReviewIndex = 0; 
+        updateCarousel();
+        reviewsModal.style.display = "flex";
+    });
+}
+
+if(nextBtn) {
+    nextBtn.addEventListener("click", () => {
+        if(reviewImages.length > 0) {
+            currentReviewIndex = (currentReviewIndex + 1) % reviewImages.length;
+            updateCarousel();
         }
+    });
+}
+if(prevBtn) {
+    prevBtn.addEventListener("click", () => {
+        if(reviewImages.length > 0) {
+            currentReviewIndex = (currentReviewIndex - 1 + reviewImages.length) % reviewImages.length;
+            updateCarousel();
+        }
+    });
+}
+
+// ==========================================
+// 13. СЕРТИФІКАТИ
+// ==========================================
+const certModal = document.getElementById("certModal");
+const fullCertImage = document.getElementById("fullCertImage");
+
+window.openCert = function(imageSrc) {
+    if(fullCertImage && certModal) {
+        fullCertImage.src = imageSrc;
+        certModal.style.display = "flex";
     }
 };
+// ==========================================
+// 14. ДИНАМІЧНІ СЕРТИФІКАТИ
+// ==========================================
+const certStatusNo = document.getElementById("certStatusNo");
+const certStatusYes = document.getElementById("certStatusYes");
+const certUploadContainer = document.getElementById("certUploadContainer");
+const adminCertList = document.getElementById("adminCertList");
+const certFileInputAdmin = document.getElementById("certFileInputAdmin");
+const certificatesSectionClient = document.getElementById("certificatesSectionClient");
+const certCarouselContainer = document.getElementById("certCarouselContainer");
+
+// Витягуємо налаштування з пам'яті (за замовчуванням показуємо демо)
+let certStatus = localStorage.getItem("adminCertStatus") || "yes";
+let savedCerts = JSON.parse(localStorage.getItem("adminCertList")) || [
+    "https://images.unsplash.com/photo-1589330694653-efa6482d8cbb?auto=format&fit=crop&q=80",
+    "https://images.unsplash.com/photo-1574607383471-155018a1a3de?auto=format&fit=crop&q=80"
+];
+
+// Малюємо сертифікати на головній сторінці для клієнта
+function renderClientCerts() {
+    if (!certificatesSectionClient || !certCarouselContainer) return;
+    
+    // Якщо адмін вибрав "Ні" або немає жодного сертифікату - ховаємо весь блок
+    if (certStatus === "no" || savedCerts.length === 0) {
+        certificatesSectionClient.style.display = "none";
+    } else {
+        certificatesSectionClient.style.display = "block";
+        certCarouselContainer.innerHTML = "";
+        
+        savedCerts.forEach(src => {
+            let img = document.createElement("img");
+            img.src = src;
+            img.className = "cert-img";
+            img.alt = "Сертифікат";
+            img.onclick = () => window.openCert(src);
+            certCarouselContainer.appendChild(img);
+        });
+    }
+}
+
+// Малюємо вікно налаштувань у Кабінеті Адміністратора
+window.renderAdminCerts = function() {
+    if (certStatusNo && certStatusYes && certUploadContainer) {
+        if (certStatus === "yes") {
+            certStatusYes.checked = true;
+            certUploadContainer.style.display = "block";
+        } else {
+            certStatusNo.checked = true;
+            certUploadContainer.style.display = "none";
+        }
+    }
+
+    if (adminCertList) {
+        adminCertList.innerHTML = "";
+        savedCerts.forEach((src, index) => {
+            let wrapper = document.createElement("div");
+            wrapper.style.position = "relative";
+            wrapper.style.display = "inline-block";
+            
+            let img = document.createElement("img");
+            img.src = src;
+            img.style.width = "100px";
+            img.style.height = "100px";
+            img.style.objectFit = "cover";
+            img.style.borderRadius = "8px";
+            img.style.border = "1px solid #444";
+            
+            // Кнопка видалення (хрестик)
+            let delBtn = document.createElement("button");
+            delBtn.innerHTML = "❌";
+            delBtn.style.position = "absolute";
+            delBtn.style.top = "-8px";
+            delBtn.style.right = "-8px";
+            delBtn.style.background = "#1a1a1a";
+            delBtn.style.border = "1px solid #333";
+            delBtn.style.borderRadius = "50%";
+            delBtn.style.cursor = "pointer";
+            delBtn.style.padding = "4px";
+            
+            delBtn.onclick = () => {
+                savedCerts.splice(index, 1);
+                localStorage.setItem("adminCertList", JSON.stringify(savedCerts));
+                renderAdminCerts();
+                renderClientCerts();
+            };
+            
+            wrapper.appendChild(img);
+            wrapper.appendChild(delBtn);
+            adminCertList.appendChild(wrapper);
+        });
+    }
+}
+
+// Слухаємо перемикачі (Так/Ні)
+if (certStatusNo && certStatusYes) {
+    certStatusNo.addEventListener("change", () => {
+        certStatus = "no";
+        localStorage.setItem("adminCertStatus", "no");
+        renderAdminCerts();
+        renderClientCerts();
+    });
+    certStatusYes.addEventListener("change", () => {
+        certStatus = "yes";
+        localStorage.setItem("adminCertStatus", "yes");
+        renderAdminCerts();
+        renderClientCerts();
+    });
+}
+
+// Завантаження нового фото (стиснення перед збереженням)
+if (certFileInputAdmin) {
+    certFileInputAdmin.addEventListener("change", function(e) {
+        const file = e.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = function(event) {
+            const img = new Image();
+            img.onload = function() {
+                const canvas = document.createElement("canvas");
+                const ctx = canvas.getContext("2d");
+                
+                // Стискаємо, щоб не переповнити пам'ять браузера
+                const MAX_WIDTH = 800;
+                let width = img.width;
+                let height = img.height;
+                
+                if (width > MAX_WIDTH) {
+                    height = Math.round((height * MAX_WIDTH) / width);
+                    width = MAX_WIDTH;
+                }
+                
+                canvas.width = width;
+                canvas.height = height;
+                ctx.drawImage(img, 0, 0, width, height);
+                
+                // Зберігаємо як стиснений JPEG
+                const base64Image = canvas.toDataURL("image/jpeg", 0.7);
+                savedCerts.push(base64Image);
+                
+                try {
+                    localStorage.setItem("adminCertList", JSON.stringify(savedCerts));
+                    renderAdminCerts();
+                    renderClientCerts();
+                } catch (err) {
+                    alert("⚠️ Пам'ять браузера переповнена! Видаліть старі сертифікати перед додаванням нових.");
+                    savedCerts.pop(); 
+                }
+            };
+            img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+    });
+}
+
+// Запускаємо перевірку одразу при завантаженні сайту
+renderClientCerts();
+// ==========================================
+// 15. ПРОФІЛЬ МАЙСТРА ТА ПОРТФОЛІО
+// ==========================================
+// Елементи клієнта (Головна)
+const clientMasterImg = document.getElementById("clientMasterImg");
+const clientMasterName = document.getElementById("clientMasterName");
+const clientMasterDesc = document.getElementById("clientMasterDesc");
+const portfolioSectionClient = document.getElementById("portfolioSectionClient");
+const portfolioCarouselContainer = document.getElementById("portfolioCarouselContainer");
+
+// Елементи адмінки
+const adminMasterNameInput = document.getElementById("adminMasterNameInput");
+const adminMasterDescInput = document.getElementById("adminMasterDescInput");
+const adminMasterPhotoPreview = document.getElementById("adminMasterPhotoPreview");
+const saveMasterInfoBtn = document.getElementById("saveMasterInfoBtn");
+const masterPhotoUpload = document.getElementById("masterPhotoUpload");
+
+const portfolioStatusNo = document.getElementById("portfolioStatusNo");
+const portfolioStatusYes = document.getElementById("portfolioStatusYes");
+const portfolioUploadContainer = document.getElementById("portfolioUploadContainer");
+const portfolioFileInput = document.getElementById("portfolioFileInput");
+const adminPortfolioList = document.getElementById("adminPortfolioList");
+
+// --- Базові дані (якщо ще нічого не змінювали) ---
+const defaultMasterName = "Ваш майстер";
+const defaultMasterDesc = "Привіт! Я — топ-майстер з досвідом понад 5 років...\n\nПрацюю виключно на преміум-матеріалах.";
+const defaultMasterPhoto = "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&q=80";
+
+// --- Завантажуємо з пам'яті ---
+let savedMasterName = localStorage.getItem("adminMasterName") || defaultMasterName;
+let savedMasterDesc = localStorage.getItem("adminMasterDesc") || defaultMasterDesc;
+let savedMasterPhoto = localStorage.getItem("adminMasterPhoto") || defaultMasterPhoto;
+
+let portfolioStatus = localStorage.getItem("adminPortfolioStatus") || "no";
+let savedPortfolio = JSON.parse(localStorage.getItem("adminPortfolioList")) || [];
+
+// --- Функція: Оновлення сторінки клієнта ---
+function renderClientMasterProfile() {
+    if (clientMasterName) clientMasterName.innerText = savedMasterName;
+    if (clientMasterDesc) clientMasterDesc.innerText = savedMasterDesc;
+    if (clientMasterImg) clientMasterImg.src = savedMasterPhoto;
+
+    // Портфоліо
+    if (portfolioSectionClient && portfolioCarouselContainer) {
+        if (portfolioStatus === "no" || savedPortfolio.length === 0) {
+            portfolioSectionClient.style.display = "none";
+        } else {
+            portfolioSectionClient.style.display = "block";
+            portfolioCarouselContainer.innerHTML = "";
+            savedPortfolio.forEach(src => {
+                let img = document.createElement("img");
+                img.src = src;
+                img.className = "cert-img"; // Використовуємо ті ж стилі, що й для сертифікатів
+                img.alt = "Робота майстра";
+                // Додаємо можливість відкрити на весь екран через ту ж модалку
+                img.onclick = () => window.openCert(src); 
+                portfolioCarouselContainer.appendChild(img);
+            });
+        }
+    }
+}
+
+// --- Функція: Відображення в Адмінці ---
+window.renderAdminMasterProfile = function() {
+    if (adminMasterNameInput) adminMasterNameInput.value = savedMasterName;
+    if (adminMasterDescInput) adminMasterDescInput.value = savedMasterDesc;
+    if (adminMasterPhotoPreview) adminMasterPhotoPreview.src = savedMasterPhoto;
+
+    if (portfolioStatusNo && portfolioStatusYes && portfolioUploadContainer) {
+        if (portfolioStatus === "yes") {
+            portfolioStatusYes.checked = true;
+            portfolioUploadContainer.style.display = "block";
+        } else {
+            portfolioStatusNo.checked = true;
+            portfolioUploadContainer.style.display = "none";
+        }
+    }
+
+    if (adminPortfolioList) {
+        adminPortfolioList.innerHTML = "";
+        savedPortfolio.forEach((src, index) => {
+            let wrapper = document.createElement("div");
+            wrapper.style.position = "relative";
+            wrapper.style.display = "inline-block";
+            
+            let img = document.createElement("img");
+            img.src = src;
+            img.style.width = "100px";
+            img.style.height = "100px";
+            img.style.objectFit = "cover";
+            img.style.borderRadius = "8px";
+            
+            let delBtn = document.createElement("button");
+            delBtn.innerHTML = "❌";
+            delBtn.style.position = "absolute";
+            delBtn.style.top = "-8px";
+            delBtn.style.right = "-8px";
+            delBtn.style.background = "#1a1a1a";
+            delBtn.style.border = "1px solid #333";
+            delBtn.style.borderRadius = "50%";
+            delBtn.style.cursor = "pointer";
+            delBtn.style.padding = "4px";
+            
+            delBtn.onclick = () => {
+                savedPortfolio.splice(index, 1);
+                localStorage.setItem("adminPortfolioList", JSON.stringify(savedPortfolio));
+                renderAdminMasterProfile();
+                renderClientMasterProfile();
+            };
+            
+            wrapper.appendChild(img);
+            wrapper.appendChild(delBtn);
+            adminPortfolioList.appendChild(wrapper);
+        });
+    }
+}
+
+// --- Збереження тексту та імені ---
+if (saveMasterInfoBtn) {
+    saveMasterInfoBtn.addEventListener("click", () => {
+        savedMasterName = adminMasterNameInput.value.trim() || defaultMasterName;
+        savedMasterDesc = adminMasterDescInput.value.trim() || defaultMasterDesc;
+        
+        localStorage.setItem("adminMasterName", savedMasterName);
+        localStorage.setItem("adminMasterDesc", savedMasterDesc);
+        
+        renderClientMasterProfile();
+        alert("✅ Дані майстра збережено!");
+    });
+}
+
+// --- Завантаження головного фото ---
+if (masterPhotoUpload) {
+    masterPhotoUpload.addEventListener("change", function(e) {
+        compressAndSaveImage(e.target.files[0], (base64) => {
+            savedMasterPhoto = base64;
+            localStorage.setItem("adminMasterPhoto", savedMasterPhoto);
+            renderAdminMasterProfile();
+            renderClientMasterProfile();
+        });
+    });
+}
+
+// --- Перемикачі Портфоліо ---
+if (portfolioStatusNo && portfolioStatusYes) {
+    portfolioStatusNo.addEventListener("change", () => {
+        portfolioStatus = "no";
+        localStorage.setItem("adminPortfolioStatus", "no");
+        renderAdminMasterProfile();
+        renderClientMasterProfile();
+    });
+    portfolioStatusYes.addEventListener("change", () => {
+        portfolioStatus = "yes";
+        localStorage.setItem("adminPortfolioStatus", "yes");
+        renderAdminMasterProfile();
+        renderClientMasterProfile();
+    });
+}
+
+// --- Завантаження фото в Портфоліо ---
+if (portfolioFileInput) {
+    portfolioFileInput.addEventListener("change", function(e) {
+        compressAndSaveImage(e.target.files[0], (base64) => {
+            savedPortfolio.push(base64);
+            try {
+                localStorage.setItem("adminPortfolioList", JSON.stringify(savedPortfolio));
+                renderAdminMasterProfile();
+                renderClientMasterProfile();
+            } catch (err) {
+                alert("⚠️ Пам'ять браузера переповнена! Видаліть старі фото перед додаванням нових.");
+                savedPortfolio.pop();
+            }
+        });
+    });
+}
+
+// --- Універсальна функція стиснення картинок ---
+function compressAndSaveImage(file, callback) {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(event) {
+        const img = new Image();
+        img.onload = function() {
+            const canvas = document.createElement("canvas");
+            const ctx = canvas.getContext("2d");
+            
+            const MAX_WIDTH = 800; // Стискаємо до 800px по ширині
+            let width = img.width;
+            let height = img.height;
+            
+            if (width > MAX_WIDTH) {
+                height = Math.round((height * MAX_WIDTH) / width);
+                width = MAX_WIDTH;
+            }
+            
+            canvas.width = width;
+            canvas.height = height;
+            ctx.drawImage(img, 0, 0, width, height);
+            
+            const base64Image = canvas.toDataURL("image/jpeg", 0.7);
+            callback(base64Image);
+        };
+        img.src = event.target.result;
+    };
+    reader.readAsDataURL(file);
+}
+
+// Запуск при старті
+renderClientMasterProfile();
