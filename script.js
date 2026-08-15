@@ -54,7 +54,7 @@ const supabaseKey = 'sb_publishable_t7QyH8dHNBBbFQGY_62oRA_CaA5vXa_';
 const supabaseClient = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // ==========================================
-// 5. ВІДПРАВКА ЗАПИСУ ТА ТЕЛЕГРАМ
+// 5. ВІДПРАВКА ЗАПИСУ (З ПІДРАХУНКОМ ЧАСУ)
 // ==========================================
 const bookingForm = document.getElementById("bookingForm");
 if (bookingForm) {
@@ -67,22 +67,30 @@ if (bookingForm) {
         const comment = document.getElementById("clientComment").value.trim();
         
         const selectedServices = [];
-        document.querySelectorAll('.modal-service-cb:checked').forEach(cb => selectedServices.push(cb.value));
+        let totalDuration = 0; // Змінна для підрахунку загального часу
 
-        if (selectedServices.length === 0) return alert("Будь ласка, оберіть хоча б одну послугу!");
-        if (!dateTime) return alert("Будь ласка, оберіть дату та час!");
+        document.querySelectorAll('.modal-service-cb:checked').forEach(cb => {
+            selectedServices.push(cb.value);
+            // Додаємо час кожної обраної послуги
+            totalDuration += parseInt(cb.getAttribute("data-duration")) || 60; 
+        });
+
+        if (selectedServices.length === 0) return alert("❌ Будь ласка, оберіть хоча б одну послугу!");
+        if (!dateTime) return alert("❌ Будь ласка, оберіть дату та час!");
 
         const submitBtn = document.querySelector("#bookingForm .submit-btn");
         const originalText = submitBtn.innerText;
         submitBtn.innerText = "Відправляємо... ⏳";
         submitBtn.disabled = true;
 
-        const { data, error } = await supabaseClient.from('bookings').insert([{ 
+        // ВІДПРАВЛЯЄМО ЗАПИС ІЗ ТРИВАЛІСТЮ (total_duration)
+        const { error } = await supabaseClient.from('bookings').insert([{ 
             client_name: name, 
             client_phone: phone, 
             services: selectedServices.join(' | '),
             booking_date: dateTime,
-            comment: comment
+            comment: comment,
+            total_duration: totalDuration 
         }]);
 
         submitBtn.innerText = originalText;
@@ -90,25 +98,14 @@ if (bookingForm) {
 
         if (error) {
             console.error("Помилка Supabase:", error);
-            alert("Ой, сталась помилка при записі 😔 Спробуйте ще раз.");
+            alert("❌ Ой, сталась помилка при записі. Спробуйте ще раз.");
         } else {
             alert("✅ Ваш запис успішно підтверджено! Чекаємо на вас.");
             
-            // Телеграм Бот
-            const botToken = '8826664279:AAGvZX59mOnuw1hKwa5tUtEZ2xkUWn1DFC4';
-            const chatId = '1366887003';
-            const tgMessage = `🔥 *НОВИЙ ЗАПИС!*\n\n👤 *Клієнт:* ${name}\n📞 *Телефон:* ${phone}\n📅 *Дата та час:* ${dateTime}\n💅 *Послуги:* ${selectedServices.join(', ')}\n💬 *Коментар:* ${comment || 'Немає'}`;
-            
-            try {
-                fetch(`https://api.telegram.org/bot${botToken}/sendMessage`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ chat_id: chatId, text: tgMessage, parse_mode: 'Markdown' })
-                });
-            } catch (err) { console.log("Помилка відправки в ТГ", err); }
-            
+            const bookingModal = document.getElementById("bookingModal");
             if(bookingModal) bookingModal.style.display = "none";
             bookingForm.reset();
+            
             const calendarBtn = document.getElementById("openCalendarBtn");
             if (calendarBtn) {
                 calendarBtn.innerText = "📅 Оберіть дату та час";
@@ -247,21 +244,13 @@ async function showTimeSlots(dayNumber) {
     const monthIndex = navDate.getMonth();
     const dateObj = new Date(year, monthIndex, dayNumber);
     const dayOfWeek = dateObj.getDay(); 
-
     const dateString = `${year}-${String(monthIndex + 1).padStart(2, '0')}-${String(dayNumber).padStart(2, '0')}`;
 
     let availableHours = [];
-    let freshSpecificSchedule = JSON.parse(localStorage.getItem("adminSpecificSchedule")) || {};
-    let freshWeeklySchedule = JSON.parse(localStorage.getItem("adminWeeklySchedule")) || {
-        1: ["10:00", "12:00", "14:00", "16:00"], 2: ["10:00", "12:00", "14:00", "16:00"],
-        3: ["10:00", "12:00", "14:00", "16:00"], 4: ["10:00", "12:00", "14:00", "16:00"],
-        5: ["10:00", "12:00", "14:00", "16:00"], 6: ["11:00", "13:00", "15:00"], 0: []
-    };
-
-    if (freshSpecificSchedule[dateString] && freshSpecificSchedule[dateString].length > 0) {
-        availableHours = freshSpecificSchedule[dateString];
+    if (window.scheduleData.specific[dateString] && window.scheduleData.specific[dateString].length > 0) {
+        availableHours = window.scheduleData.specific[dateString];
     } else {
-        availableHours = freshWeeklySchedule[dayOfWeek] || [];
+        availableHours = window.scheduleData.weekly[dayOfWeek] || [];
     }
 
     if (availableHours.length === 0) {
@@ -269,12 +258,35 @@ async function showTimeSlots(dayNumber) {
         return;
     }
 
+    // Витягуємо записи на обрану дату разом з їхньою тривалістю
     const { data: bookings } = await supabaseClient
         .from('bookings')
-        .select('booking_date')
+        .select('booking_date, total_duration')
         .like('booking_date', `${selectedDate}%`); 
 
-    const bookedTimes = bookings ? bookings.map(b => b.booking_date.split(', ')[1]) : [];
+    // Функція конвертації часу "HH:MM" у хвилини від початку доби (напр. "10:30" -> 630)
+    const timeToMinutes = (timeStr) => {
+        const [h, m] = timeStr.split(':').map(Number);
+        return h * 60 + m;
+    };
+
+    // Формуємо масив зайнятих інтервалів [startMin, endMin]
+    const bookedIntervals = bookings ? bookings.map(b => {
+        const timeStr = b.booking_date.split(', ')[1];
+        const startMin = timeToMinutes(timeStr);
+        const duration = b.total_duration || 60;
+        return { start: startMin, end: startMin + duration };
+    }) : [];
+
+    timeSlots.innerHTML = "";
+
+  // ... [початок функції залишається без змін до моменту перебору availableHours]
+
+    const today = new Date();
+    // Перевіряємо, чи обраний день є сьогоднішнім
+    const isToday = (year === today.getFullYear() && monthIndex === today.getMonth() && dayNumber === today.getDate());
+    const currentMinutes = today.getHours() * 60 + today.getMinutes();
+
     timeSlots.innerHTML = "";
 
     availableHours.forEach(time => {
@@ -282,7 +294,22 @@ async function showTimeSlots(dayNumber) {
         timeBtn.classList.add("time-box");
         timeBtn.innerText = time;
 
-        if (bookedTimes.includes(time)) {
+        const slotMin = timeToMinutes(time);
+        
+        // 1. ПЕРЕВІРКА МИНУЛОГО ЧАСУ (якщо сьогодні)
+        if (isToday && slotMin <= currentMinutes) {
+            timeBtn.classList.add("booked");
+            timeBtn.style.opacity = "0.4"; // Робимо його тьмяним
+            timeBtn.style.cursor = "not-allowed";
+            timeBtn.addEventListener("click", () => showToast("Цей час вже минув! ⏳"));
+            timeSlots.appendChild(timeBtn);
+            return; // Зупиняємо логіку для цього слоту і йдемо до наступного
+        }
+        
+        // 2. ПЕРЕВІРКА ПЕРЕТИНУ З ІНШИМИ ЗАПИСАМИ (твоя поточна логіка)
+        const isOverlap = bookedIntervals.some(interval => slotMin >= interval.start && slotMin < interval.end);
+
+        if (isOverlap) {
             timeBtn.classList.add("booked");
             timeBtn.addEventListener("click", () => showToast("Цей час вже заброньовано! 💖"));
         } else {
@@ -307,32 +334,42 @@ function showToast(message) {
 }
 
 // ==========================================
-// 7. ДИНАМІЧНИЙ ПРАЙС-ЛИСТ (КЛІЄНТ ТА АДМІН)
+// 7. ДИНАМІЧНИЙ ПРАЙС-ЛИСТ (БЕКЕНД SUPABASE)
 // ==========================================
 const mainPriceList = document.getElementById("mainPriceList");
 const bookingServicesList = document.getElementById("bookingServicesList");
 const adminPriceTableBody = document.getElementById("adminPriceTableBody");
 const editPriceBtnHero = document.getElementById("editPriceBtnHero");
 
-// Базові послуги (якщо адмін ще нічого не міняв)
-const defaultServices = [
-    { id: 1, name: "Комплекс (Зняття + Манікюр + Покриття)", price: 650 },
-    { id: 2, name: "Зняття + Покриття", price: 650 },
-    { id: 3, name: "Манікюр + Покриття", price: 620 },
-    { id: 4, name: "Зняття + Манікюр", price: 550 },
-    { id: 5, name: "Однотонне покриття", price: 450 }
-];
+let activeServices = [];
 
-// Витягуємо прайс з пам'яті
-let activeServices = JSON.parse(localStorage.getItem("adminPriceList")) || defaultServices;
+// --- Зчитування прайсу з бази даних ---
+async function fetchServices() {
+    // Робимо запит до таблиці services, RLS пропустить, бо SELECT дозволений усім
+    const { data, error } = await supabaseClient
+        .from('services')
+        .select('*')
+        .order('id', { ascending: true });
 
-// Функція малювання прайсу для клієнтів (на головній та в модалці)
+    if (error) {
+        console.error("Помилка завантаження прайсу:", error);
+        return;
+    }
+    
+    activeServices = data || [];
+    renderClientPriceList();
+    if (document.body.classList.contains("admin-mode-active")) {
+        renderAdminPriceList();
+    }
+}
+
+// --- Малювання прайсу для клієнтів ---
 function renderClientPriceList() {
     if (mainPriceList) mainPriceList.innerHTML = "";
     if (bookingServicesList) bookingServicesList.innerHTML = "";
 
     activeServices.forEach((service, index) => {
-        // 1. Додаємо на головну сторінку
+        // 1. Головна сторінка
         if (mainPriceList) {
             let item = document.createElement("div");
             item.className = "price-item hidden";
@@ -342,27 +379,23 @@ function renderClientPriceList() {
                 <div class="price-value">${service.price} ₴</div>
             `;
             
-            // Логіка кліку по послузі (відкриває форму з галочкою)
             item.addEventListener("click", () => {
                 const bookingModal = document.getElementById("bookingModal");
                 if (bookingModal) bookingModal.style.display = "flex";
                 
-                // Ставимо галочку
                 document.querySelectorAll(".modal-service-cb").forEach(cb => {
                     cb.checked = (cb.value === service.name);
                 });
             });
             mainPriceList.appendChild(item);
-            
-            // Підключаємо анімацію появи
-            observer.observe(item);
+            observer.observe(item); // Анімація появи
         }
 
-        // 2. Додаємо в форму запису (чекбокси)
+        // 2. Чекбокси у модалці запису (додано data-duration для майбутнього підрахунку)
         if (bookingServicesList) {
             bookingServicesList.innerHTML += `
                 <label class="custom-checkbox">
-                    <input type="checkbox" value="${service.name}" class="modal-service-cb"> 
+                    <input type="checkbox" value="${service.name}" class="modal-service-cb" data-duration="${service.duration}"> 
                     <span>${service.name} - ${service.price} ₴</span>
                 </label>
             `;
@@ -370,10 +403,10 @@ function renderClientPriceList() {
     });
 }
 
-// Запускаємо малювання при завантаженні сайту
-renderClientPriceList();
+// ОДРАЗУ ВИКЛИКАЄМО ФУНКЦІЮ ПРИ ЗАВАНТАЖЕННІ СТОРІНКИ
+fetchServices();
 
-// Відкриття кабінету по кнопці "Редагувати" на головній
+// --- Відкриття кабінету ---
 if (editPriceBtnHero) {
     editPriceBtnHero.addEventListener("click", () => {
         const adminCabinetModal = document.getElementById("adminCabinetModal");
@@ -383,12 +416,14 @@ if (editPriceBtnHero) {
 }
 
 // --- ЛОГІКА РЕДАГУВАННЯ В КАБІНЕТІ ---
+// --- ЛОГІКА РЕДАГУВАННЯ В КАБІНЕТІ (З ЧАСОМ) ---
 function renderAdminPriceList() {
     if (!adminPriceTableBody) return;
     adminPriceTableBody.innerHTML = "";
     
     if (activeServices.length === 0) {
-        adminPriceTableBody.innerHTML = "<tr><td colspan='3' style='text-align:center;'>Список порожній</td></tr>";
+        // Зверни увагу: colspan='4', бо тепер у нас 4 колонки в HTML
+        adminPriceTableBody.innerHTML = "<tr><td colspan='4' style='text-align:center;'>Список порожній</td></tr>";
         return;
     }
 
@@ -397,46 +432,70 @@ function renderAdminPriceList() {
         tr.innerHTML = `
             <td style="text-align: left;">${service.name}</td>
             <td>${service.price} ₴</td>
+            <td style="color: var(--accent-pink);">${service.duration} хв</td> <!-- ДОДАНО ЧАС -->
             <td><button class="delete-booking-btn" onclick="deleteService(${service.id})" title="Видалити послугу">❌</button></td>
         `;
         adminPriceTableBody.appendChild(tr);
     });
 }
 
-// Додавання нової послуги
+// --- ДОДАВАННЯ НОВОЇ ПОСЛУГИ В БАЗУ (З ЧАСОМ) ---
 const addNewServiceBtn = document.getElementById("addNewServiceBtn");
 if (addNewServiceBtn) {
-    addNewServiceBtn.addEventListener("click", () => {
+    addNewServiceBtn.addEventListener("click", async () => {
         const nameInput = document.getElementById("newServiceName");
         const priceInput = document.getElementById("newServicePrice");
+        const durationInput = document.getElementById("newServiceDuration"); // Зчитуємо нове поле
         
         const name = nameInput.value.trim();
         const price = parseInt(priceInput.value);
+        const duration = parseInt(durationInput.value) || 60; // За замовчуванням 60 хв, якщо поле пусте
 
-        if (!name || isNaN(price)) return alert("Будь ласка, введіть коректну назву та ціну!");
+        if (!name || isNaN(price) || isNaN(duration)) {
+            return alert("❌ Введіть коректну назву, ціну та тривалість (у хвилинах)!");
+        }
 
-        const newId = activeServices.length > 0 ? Math.max(...activeServices.map(s => s.id)) + 1 : 1;
-        
-        activeServices.push({ id: newId, name: name, price: price });
-        localStorage.setItem("adminPriceList", JSON.stringify(activeServices));
-        
-        nameInput.value = "";
-        priceInput.value = "";
-        
-        renderAdminPriceList(); // Оновлюємо таблицю адміна
-        renderClientPriceList(); // ОДРАЗУ оновлюємо прайс клієнта на сайті
+        addNewServiceBtn.innerText = "Додаємо... ⏳";
+        addNewServiceBtn.disabled = true;
+
+        // Записуємо дані у Supabase
+        const { error } = await supabaseClient.from('services').insert([{ 
+            name: name, 
+            price: price, 
+            duration: duration 
+        }]);
+
+        addNewServiceBtn.innerText = "Додати";
+        addNewServiceBtn.disabled = false;
+
+        if (error) {
+            console.error("Помилка додавання:", error);
+            alert("❌ Відмова у доступі або помилка сервера!");
+        } else {
+            // Очищуємо поля
+            nameInput.value = "";
+            priceInput.value = "";
+            durationInput.value = "60";
+            
+            await fetchServices(); // Перезавантажуємо прайс із бази
+        }
     });
 }
 
-// Видалення послуги
-window.deleteService = function(id) {
+// --- ВИДАЛЕННЯ ПОСЛУГИ З БАЗИ ---
+window.deleteService = async function(id) {
     if (confirm("Ви дійсно хочете видалити цю послугу з прайсу?")) {
-        activeServices = activeServices.filter(s => s.id !== id);
-        localStorage.setItem("adminPriceList", JSON.stringify(activeServices));
-        renderAdminPriceList();
-        renderClientPriceList();
+        const { error } = await supabaseClient.from('services').delete().eq('id', id);
+        
+        if (error) {
+            console.error("Помилка видалення:", error);
+            alert("❌ Відмова у доступі. Ви не авторизовані!");
+        } else {
+            await fetchServices(); // Оновлюємо список після видалення
+        }
     }
 };
+
 
 // ==========================================
 // 8. ПЕРЕВІРКА ЗАПИСУ (КЛІЄНТИ)
@@ -526,34 +585,68 @@ const adminCabinetBtn = document.getElementById("adminCabinetBtn");
 const adminCabinetModal = document.getElementById("adminCabinetModal");
 const adminLogoutBtn = document.getElementById("adminLogoutBtn");
 
-if (localStorage.getItem("isAdmin") === "true") {
-    document.body.classList.add("admin-mode-active");
+// --- 1. ПЕРЕВІРКА СЕСІЇ ПРИ ЗАВАНТАЖЕННІ ---
+// Тепер замість localStorage ми питаємо сервер, чи токен ще живий
+async function checkAdminSession() {
+    const { data: { session } } = await supabaseClient.auth.getSession();
+    if (session) {
+        document.body.classList.add("admin-mode-active");
+    }
 }
+checkAdminSession();
 
+// --- 2. НОВИЙ БЕЗПЕЧНИЙ ЛОГІН (З ПОШТОЮ ТА ПАРОЛЕМ) ---
 if (loginAdminBtn) {
-    loginAdminBtn.addEventListener("click", () => {
+    loginAdminBtn.addEventListener("click", async () => {
         const phone = document.getElementById("checkPhoneInput").value.replace(/\D/g, '');
+        const email = document.getElementById("adminEmailInput").value.trim();
         const password = adminPasswordInput ? adminPasswordInput.value : "";
         
-        loginAdminBtn.innerText = "Перевірка...";
-        if (phone === "0680011001" && password === "lviv_avokado2007") {
+        if (phone !== "0680011001") {
+            alert("❌ Невідомий номер адміністратора!");
+            return;
+        }
+
+        if (!email || !password) {
+            alert("❌ Введіть пошту та пароль!");
+            return;
+        }
+
+        loginAdminBtn.innerText = "Перевірка... ⏳";
+        loginAdminBtn.disabled = true;
+
+        // Динамічно передаємо введену пошту та пароль у Supabase
+        const { data, error } = await supabaseClient.auth.signInWithPassword({
+            email: email, 
+            password: password
+        });
+
+        loginAdminBtn.innerText = "Увійти в систему";
+        loginAdminBtn.disabled = false;
+
+        if (error) {
+            alert("❌ Невірний пароль, пошта або помилка сервера!");
+            console.error("Помилка авторизації:", error.message);
+        } else {
             document.body.classList.add("admin-mode-active");
-            localStorage.setItem("isAdmin", "true"); 
             alert("✅ Вітаємо в панелі управління, Бос!");
             if(checkBookingModal) checkBookingModal.style.display = "none";
-        } else {
-            alert("❌ Невірний пароль!");
+            // Очищуємо поля після успішного входу
+            document.getElementById("adminEmailInput").value = "";
+            adminPasswordInput.value = "";
         }
-        loginAdminBtn.innerText = "Увійти в систему";
     });
 }
 
+// --- 3. НОВИЙ БЕЗПЕЧНИЙ ВИХІД ---
 if (adminLogoutBtn) {
-    adminLogoutBtn.addEventListener("click", () => {
+    adminLogoutBtn.addEventListener("click", async () => {
+        // Знищуємо токен на сервері та в браузері
+        await supabaseClient.auth.signOut();
+        
         document.body.classList.remove("admin-mode-active");
-        localStorage.removeItem("isAdmin"); 
         if(adminCabinetModal) adminCabinetModal.style.display = "none";
-        alert("Ви успішно вийшли з адміністративного акаунта.");
+        alert("🚪 Ви успішно вийшли з системи.");
     });
 }
 
@@ -577,16 +670,18 @@ window.switchCabinetView = function(viewId) {
     if (viewId === 'certificatesEditingView') renderAdminCerts();
     if (viewId === 'masterProfileEditingView') renderAdminMasterProfile(); // НОВИЙ РЯДОК
 };
+
 // ==========================================
-// 10. АДМІН-ПАНЕЛЬ (БАЗА ТА ЗАПИСИ)
+// 10. АДМІН-ПАНЕЛЬ (БАЗА ТА СТАТУСИ ЗАПИСІВ)
 // ==========================================
 async function loadAdminData() {
     const adminTbody = document.getElementById("adminTableBody");
     const upcomingTbody = document.getElementById("upcomingTableBody");
     
     if(adminTbody) adminTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Завантаження даних... ⏳</td></tr>";
-    if(upcomingTbody) upcomingTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Завантаження записів... ⏳</td></tr>";
+    if(upcomingTbody) upcomingTbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Завантаження записів... ⏳</td></tr>";
     
+    // Витягуємо всі записи
     const { data: bookings, error } = await supabaseClient
         .from('bookings')
         .select('*')
@@ -597,6 +692,7 @@ async function loadAdminData() {
         return;
     }
 
+    // --- ЛОГІКА ДЛЯ ВКЛАДКИ "БАЗА КЛІЄНТІВ" ---
     const clients = {};
     bookings.forEach(b => {
         if (!clients[b.client_phone]) {
@@ -613,7 +709,6 @@ async function loadAdminData() {
 
     const adminSearchInput = document.getElementById("adminSearchInput");
     if(adminSearchInput) {
-        // Щоб уникнути дублювання подій, робимо це так:
         adminSearchInput.oninput = (e) => {
             const term = e.target.value.toLowerCase();
             const filtered = clientArray.filter(c => c.name.toLowerCase().includes(term) || c.phone.includes(term));
@@ -621,6 +716,7 @@ async function loadAdminData() {
         };
     }
 
+    // --- ЛОГІКА ДЛЯ ВКЛАДКИ "МАЙБУТНІ ЗАПИСИ" (ЗІ СТАТУСАМИ) ---
     if (upcomingTbody) {
         upcomingTbody.innerHTML = "";
         const today = new Date();
@@ -628,19 +724,37 @@ async function loadAdminData() {
         const todayStr = `${today.getDate()} ${monthNames[today.getMonth()]}`;
 
         if (bookings.length === 0) {
-            upcomingTbody.innerHTML = "<tr><td colspan='5' style='text-align:center;'>Записів ще немає</td></tr>";
+            upcomingTbody.innerHTML = "<tr><td colspan='6' style='text-align:center;'>Записів ще немає</td></tr>";
         } else {
+            // Щоб додати заголовок для статусу, потрібно переконатися, що в HTML (рядок 218) є <th>Статус</th>
+            // Якщо його немає, не страшно, ми просто впишемо його в Дії
             bookings.forEach(b => {
                 let tr = document.createElement("tr");
                 const isToday = b.booking_date.includes(todayStr);
                 if (isToday) tr.classList.add("today-booking");
+                
+                // Візуалізація статусу
+                let statusBadge = "";
+                let actionButtons = "";
+                
+                if (b.status === 'confirmed') {
+                    statusBadge = `<span style="background: rgba(40, 167, 69, 0.2); color: #28a745; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;">🟢 Підтверджено</span>`;
+                    actionButtons = `<button class="delete-booking-btn" onclick="deleteBooking('${b.id}')" title="Скасувати запис">❌</button>`;
+                } else {
+                    statusBadge = `<span style="background: rgba(255, 193, 7, 0.2); color: #ffc107; padding: 4px 8px; border-radius: 4px; font-size: 0.8rem; font-weight: bold;">🟡 Очікує</span>`;
+                    actionButtons = `
+                        <button class="cta-btn" onclick="confirmBooking('${b.id}')" style="padding: 5px 10px; font-size: 0.8rem; margin-right: 5px;" title="Підтвердити">✅</button>
+                        <button class="delete-booking-btn" onclick="deleteBooking('${b.id}')" title="Скасувати">❌</button>
+                    `;
+                }
                 
                 tr.innerHTML = `
                     <td>${b.client_name} ${isToday ? '<span class="today-badge">СЬОГОДНІ</span>' : ''}</td>
                     <td>${b.client_phone}</td>
                     <td>${b.booking_date}</td>
                     <td style="font-size: 0.85rem; color: #aaa;">${b.services}</td>
-                    <td><button class="delete-booking-btn" onclick="deleteBooking('${b.id}')" title="Скасувати запис">❌</button></td>
+                    <td>${statusBadge}</td>
+                    <td style="white-space: nowrap;">${actionButtons}</td>
                 `;
                 upcomingTbody.appendChild(tr);
             });
@@ -669,38 +783,100 @@ function renderAdminTable(dataArray) {
     });
 }
 
+// --- ПІДТВЕРДЖЕННЯ ЗАПИСУ ---
+window.confirmBooking = async function(bookingId) {
+    const { error } = await supabaseClient
+        .from('bookings')
+        .update({ status: 'confirmed' })
+        .eq('id', bookingId);
+        
+    if (error) {
+        console.error("Помилка підтвердження:", error);
+        alert("❌ Відмова у доступі. Ви не авторизовані!");
+    } else {
+        loadAdminData(); // Перезавантажуємо таблицю
+    }
+};
+
+// --- ВИДАЛЕННЯ/СКАСУВАННЯ ЗАПИСУ ---
 window.deleteBooking = async function(bookingId) {
     const isConfirmed = confirm("Ви впевнені, що хочете скасувати цей запис? Відмінити цю дію буде неможливо.");
     if (isConfirmed) {
         const { error } = await supabaseClient.from('bookings').delete().eq('id', bookingId);
         if (error) {
             console.error("Помилка видалення:", error);
-            alert("Сталася помилка при видаленні 😔 Спробуйте ще раз.");
+            alert("❌ Сталася помилка при видаленні.");
         } else {
-            alert("✅ Запис успішно скасовано!");
-            loadAdminData();
+            loadAdminData(); // Перезавантажуємо таблицю
         }
     }
 };
 
 // ==========================================
-// 11. АДМІН-ПАНЕЛЬ (РЕДАГУВАННЯ ГРАФІКА)
+// 11. ГРАФІК РОБОТИ ТА ВИХІДНІ (SUPABASE)
 // ==========================================
-// 11.1 Вихідні
+
+// Глобальний об'єкт для зберігання розкладу в оперативній пам'яті
+window.scheduleData = {
+    vacations: [],
+    weekly: { 1: ["10:00", "12:00", "14:00", "16:00"], 2: ["10:00", "12:00", "14:00", "16:00"], 3: ["10:00", "12:00", "14:00", "16:00"], 4: ["10:00", "12:00", "14:00", "16:00"], 5: ["10:00", "12:00", "14:00", "16:00"], 6: ["11:00", "13:00", "15:00"], 0: [] },
+    specific: {}
+};
+
+// --- ЗАВАНТАЖЕННЯ З БАЗИ ПРИ СТАРТІ ---
+async function loadScheduleFromDB() {
+    const { data, error } = await supabaseClient
+        .from('app_settings')
+        .select('*')
+        .in('setting_key', ['vacations', 'weekly_schedule', 'specific_schedule']);
+        
+    if (data) {
+        data.forEach(row => {
+            if (row.setting_key === 'vacations') window.scheduleData.vacations = row.setting_value || [];
+            if (row.setting_key === 'weekly_schedule') window.scheduleData.weekly = row.setting_value || window.scheduleData.weekly;
+            if (row.setting_key === 'specific_schedule') window.scheduleData.specific = row.setting_value || {};
+        });
+    }
+    
+    // Оновлюємо візуал адмінки, якщо функції вже доступні
+    if (typeof renderVacationTags === 'function') renderVacationTags();
+    if (typeof renderTimeTags === 'function') renderTimeTags();
+    if (typeof renderSpecificTimeTags === 'function') renderSpecificTimeTags();
+}
+
+// --- УНІВЕРСАЛЬНЕ ЗБЕРЕЖЕННЯ В БАЗУ ---
+async function saveScheduleToDB(key, value) {
+    const { error } = await supabaseClient
+        .from('app_settings')
+        .update({ setting_value: value })
+        .eq('setting_key', key);
+        
+    if (error) {
+        console.error("Помилка збереження графіка:", error);
+        alert("❌ Помилка доступу. Ви не авторизовані!");
+    } else {
+        // Якщо календар відкритий, перемальовуємо його
+        const calendarModal = document.getElementById("calendarModal");
+        if(calendarModal && calendarModal.style.display === "flex" && typeof generateDays === 'function') {
+            generateDays();
+        }
+    }
+}
+
+// --- 11.1 ВИХІДНІ ---
 const vacationDateInput = document.getElementById("vacationDateInput");
 const addVacationBtn = document.getElementById("addVacationBtn");
 const vacationTagsContainer = document.getElementById("vacationTagsContainer");
-let savedVacations = JSON.parse(localStorage.getItem("adminVacations")) || [];
 
 function renderVacationTags() {
     if(!vacationTagsContainer) return;
     vacationTagsContainer.innerHTML = "";
-    if (savedVacations.length === 0) {
+    if (window.scheduleData.vacations.length === 0) {
         vacationTagsContainer.innerHTML = "<span style='color: #555;'>Немає запланованих вихідних</span>";
         return;
     }
-    savedVacations.sort();
-    savedVacations.forEach(date => {
+    let sorted = [...window.scheduleData.vacations].sort();
+    sorted.forEach(date => {
         let tag = document.createElement("div");
         tag.classList.add("vacation-tag");
         const [y, m, d] = date.split('-');
@@ -713,12 +889,11 @@ if (addVacationBtn) {
     addVacationBtn.addEventListener("click", () => {
         const selectedDate = vacationDateInput.value;
         if (!selectedDate) return alert("Оберіть дату!");
-        if (!savedVacations.includes(selectedDate)) {
-            savedVacations.push(selectedDate);
-            localStorage.setItem("adminVacations", JSON.stringify(savedVacations));
+        if (!window.scheduleData.vacations.includes(selectedDate)) {
+            window.scheduleData.vacations.push(selectedDate);
+            saveScheduleToDB('vacations', window.scheduleData.vacations);
             renderVacationTags();
-            if(vacationDateInput) vacationDateInput.value = ""; 
-            if(calendarModal && calendarModal.style.display === "flex") generateDays(); 
+            vacationDateInput.value = ""; 
         } else {
             alert("Цей день вже відмічено як вихідний!");
         }
@@ -726,36 +901,28 @@ if (addVacationBtn) {
 }
 
 window.removeVacation = function(dateToRemove) {
-    savedVacations = savedVacations.filter(date => date !== dateToRemove);
-    localStorage.setItem("adminVacations", JSON.stringify(savedVacations));
+    window.scheduleData.vacations = window.scheduleData.vacations.filter(date => date !== dateToRemove);
+    saveScheduleToDB('vacations', window.scheduleData.vacations);
     renderVacationTags();
-    if(calendarModal && calendarModal.style.display === "flex") generateDays(); 
 };
-renderVacationTags();
 
-// 11.2 Тижневий Графік
+// --- 11.2 ТИЖНЕВИЙ ГРАФІК ---
 const dayOfWeekSelect = document.getElementById("dayOfWeekSelect");
 const timeSlotInput = document.getElementById("timeSlotInput");
 const addTimeSlotBtn = document.getElementById("addTimeSlotBtn");
 const timeTagsContainer = document.getElementById("timeTagsContainer");
-let defaultSchedule = {
-    1: ["10:00", "12:00", "14:00", "16:00"], 2: ["10:00", "12:00", "14:00", "16:00"],
-    3: ["10:00", "12:00", "14:00", "16:00"], 4: ["10:00", "12:00", "14:00", "16:00"],
-    5: ["10:00", "12:00", "14:00", "16:00"], 6: ["11:00", "13:00", "15:00"], 0: []
-};
-let weeklySchedule = JSON.parse(localStorage.getItem("adminWeeklySchedule")) || defaultSchedule;
 
 function renderTimeTags() {
     if (!timeTagsContainer || !dayOfWeekSelect) return;
     const selectedDay = dayOfWeekSelect.value;
-    const times = weeklySchedule[selectedDay] || [];
+    const times = window.scheduleData.weekly[selectedDay] || [];
     timeTagsContainer.innerHTML = "";
     if (times.length === 0) {
         timeTagsContainer.innerHTML = "<span style='color: #555;'>У цей день немає прийомів (Вихідний)</span>";
         return;
     }
-    times.sort();
-    times.forEach(time => {
+    let sorted = [...times].sort();
+    sorted.forEach(time => {
         let tag = document.createElement("div");
         tag.classList.add("time-tag");
         tag.innerHTML = `${time} <button class="delete-tag-btn" onclick="removeTimeSlot('${selectedDay}', '${time}')" style="color:#888;">&times;</button>`;
@@ -769,29 +936,29 @@ if (addTimeSlotBtn) {
         const selectedDay = dayOfWeekSelect.value;
         const newTime = timeSlotInput.value;
         if (!newTime) return alert("Оберіть час!");
-        if (!weeklySchedule[selectedDay].includes(newTime)) {
-            weeklySchedule[selectedDay].push(newTime);
-            localStorage.setItem("adminWeeklySchedule", JSON.stringify(weeklySchedule));
+        if (!window.scheduleData.weekly[selectedDay]) window.scheduleData.weekly[selectedDay] = [];
+        if (!window.scheduleData.weekly[selectedDay].includes(newTime)) {
+            window.scheduleData.weekly[selectedDay].push(newTime);
+            saveScheduleToDB('weekly_schedule', window.scheduleData.weekly);
             renderTimeTags();
-            if(timeSlotInput) timeSlotInput.value = "";
+            timeSlotInput.value = "";
         } else {
             alert("Цей час вже є у графіку на цей день!");
         }
     });
 }
+
 window.removeTimeSlot = function(day, timeToRemove) {
-    weeklySchedule[day] = weeklySchedule[day].filter(time => time !== timeToRemove);
-    localStorage.setItem("adminWeeklySchedule", JSON.stringify(weeklySchedule));
+    window.scheduleData.weekly[day] = window.scheduleData.weekly[day].filter(time => time !== timeToRemove);
+    saveScheduleToDB('weekly_schedule', window.scheduleData.weekly);
     renderTimeTags();
 };
-renderTimeTags();
 
-// 11.3 Особливий Графік на Дату
+// --- 11.3 ОСОБЛИВИЙ ГРАФІК НА ДАТУ ---
 const specificDateInput = document.getElementById("specificDateInput");
 const specificTimeInput = document.getElementById("specificTimeInput");
 const addSpecificTimeBtn = document.getElementById("addSpecificTimeBtn");
 const specificTimeTagsContainer = document.getElementById("specificTimeTagsContainer");
-let specificSchedule = JSON.parse(localStorage.getItem("adminSpecificSchedule")) || {};
 
 function renderSpecificTimeTags() {
     if (!specificTimeTagsContainer || !specificDateInput) return;
@@ -800,14 +967,14 @@ function renderSpecificTimeTags() {
         specificTimeTagsContainer.innerHTML = "<span style='color: #555;'>Оберіть дату, щоб побачити або змінити її години</span>";
         return;
     }
-    const times = specificSchedule[selectedDate] || [];
+    const times = window.scheduleData.specific[selectedDate] || [];
     specificTimeTagsContainer.innerHTML = "";
     if (times.length === 0) {
-        specificTimeTagsContainer.innerHTML = "<span style='color: #555;'>Немає особливих годин. Буде діяти стандартний тижневий графік.</span>";
+        specificTimeTagsContainer.innerHTML = "<span style='color: #555;'>Немає особливих годин. Діє стандартний графік.</span>";
         return;
     }
-    times.sort();
-    times.forEach(time => {
+    let sorted = [...times].sort();
+    sorted.forEach(time => {
         let tag = document.createElement("div");
         tag.classList.add("time-tag");
         tag.innerHTML = `${time} <button class="delete-tag-btn" onclick="removeSpecificTimeSlot('${selectedDate}', '${time}')" style="color:#888;">&times;</button>`;
@@ -821,23 +988,27 @@ if (addSpecificTimeBtn) {
         const date = specificDateInput.value;
         const time = specificTimeInput.value;
         if (!date || !time) return alert("Оберіть дату та час!");
-        if (!specificSchedule[date]) specificSchedule[date] = [];
-        if (!specificSchedule[date].includes(time)) {
-            specificSchedule[date].push(time);
-            localStorage.setItem("adminSpecificSchedule", JSON.stringify(specificSchedule));
+        if (!window.scheduleData.specific[date]) window.scheduleData.specific[date] = [];
+        if (!window.scheduleData.specific[date].includes(time)) {
+            window.scheduleData.specific[date].push(time);
+            saveScheduleToDB('specific_schedule', window.scheduleData.specific);
             renderSpecificTimeTags();
-            if(specificTimeInput) specificTimeInput.value = "";
+            specificTimeInput.value = "";
         } else {
             alert("Цей час вже додано на цю дату!");
         }
     });
 }
+
 window.removeSpecificTimeSlot = function(date, timeToRemove) {
-    specificSchedule[date] = specificSchedule[date].filter(time => time !== timeToRemove);
-    if (specificSchedule[date].length === 0) delete specificSchedule[date]; 
-    localStorage.setItem("adminSpecificSchedule", JSON.stringify(specificSchedule));
+    window.scheduleData.specific[date] = window.scheduleData.specific[date].filter(time => time !== timeToRemove);
+    if (window.scheduleData.specific[date].length === 0) delete window.scheduleData.specific[date]; 
+    saveScheduleToDB('specific_schedule', window.scheduleData.specific);
     renderSpecificTimeTags();
 };
+
+// --- ВИКЛИК ПРИ СТАРТІ ---
+loadScheduleFromDB();
 
 // ==========================================
 // 12. ВІДГУКИ (КАРУСЕЛЬ ТА ЗАВАНТАЖЕННЯ)
@@ -961,8 +1132,9 @@ window.openCert = function(imageSrc) {
         certModal.style.display = "flex";
     }
 };
+
 // ==========================================
-// 14. ДИНАМІЧНІ СЕРТИФІКАТИ
+// 14. ДИНАМІЧНІ СЕРТИФІКАТИ (SUPABASE)
 // ==========================================
 const certStatusNo = document.getElementById("certStatusNo");
 const certStatusYes = document.getElementById("certStatusYes");
@@ -972,25 +1144,59 @@ const certFileInputAdmin = document.getElementById("certFileInputAdmin");
 const certificatesSectionClient = document.getElementById("certificatesSectionClient");
 const certCarouselContainer = document.getElementById("certCarouselContainer");
 
-// Витягуємо налаштування з пам'яті (за замовчуванням показуємо демо)
-let certStatus = localStorage.getItem("adminCertStatus") || "yes";
-let savedCerts = JSON.parse(localStorage.getItem("adminCertList")) || [
-    "https://images.unsplash.com/photo-1589330694653-efa6482d8cbb?auto=format&fit=crop&q=80",
-    "https://images.unsplash.com/photo-1574607383471-155018a1a3de?auto=format&fit=crop&q=80"
-];
+// --- СТРУКТУРА ДАНИХ ---
+let certData = {
+    status: "yes",
+    list: [
+        "https://images.unsplash.com/photo-1589330694653-efa6482d8cbb?auto=format&fit=crop&q=80",
+        "https://images.unsplash.com/photo-1574607383471-155018a1a3de?auto=format&fit=crop&q=80"
+    ]
+};
 
-// Малюємо сертифікати на головній сторінці для клієнта
+// --- ЗАВАНТАЖЕННЯ З БЕКЕНДУ ---
+async function loadCertificates() {
+    const { data, error } = await supabaseClient
+        .from('app_settings')
+        .select('setting_value')
+        .eq('setting_key', 'certificates')
+        .single();
+
+    if (data && data.setting_value) {
+        certData = data.setting_value;
+    }
+    
+    renderClientCerts();
+    if (document.body.classList.contains("admin-mode-active")) {
+        renderAdminCerts();
+    }
+}
+
+// --- ЗБЕРЕЖЕННЯ НА БЕКЕНД ---
+async function saveCertificatesToDB() {
+    const { error } = await supabaseClient
+        .from('app_settings')
+        // Використовуємо upsert, щоб створити запис, якщо його ще не було в базі
+        .upsert({ setting_key: 'certificates', setting_value: certData });
+
+    if (error) {
+        console.error("Помилка збереження сертифікатів:", error);
+        alert("❌ Відмова у доступі. Ви не авторизовані!");
+    } else {
+        renderClientCerts();
+    }
+}
+
+// --- ВІДОБРАЖЕННЯ ДЛЯ КЛІЄНТА ---
 function renderClientCerts() {
     if (!certificatesSectionClient || !certCarouselContainer) return;
     
-    // Якщо адмін вибрав "Ні" або немає жодного сертифікату - ховаємо весь блок
-    if (certStatus === "no" || savedCerts.length === 0) {
+    if (certData.status === "no" || certData.list.length === 0) {
         certificatesSectionClient.style.display = "none";
     } else {
         certificatesSectionClient.style.display = "block";
         certCarouselContainer.innerHTML = "";
         
-        savedCerts.forEach(src => {
+        certData.list.forEach(src => {
             let img = document.createElement("img");
             img.src = src;
             img.className = "cert-img";
@@ -1001,10 +1207,10 @@ function renderClientCerts() {
     }
 }
 
-// Малюємо вікно налаштувань у Кабінеті Адміністратора
+// --- ВІДОБРАЖЕННЯ В АДМІНЦІ ---
 window.renderAdminCerts = function() {
     if (certStatusNo && certStatusYes && certUploadContainer) {
-        if (certStatus === "yes") {
+        if (certData.status === "yes") {
             certStatusYes.checked = true;
             certUploadContainer.style.display = "block";
         } else {
@@ -1015,36 +1221,24 @@ window.renderAdminCerts = function() {
 
     if (adminCertList) {
         adminCertList.innerHTML = "";
-        savedCerts.forEach((src, index) => {
+        certData.list.forEach((src, index) => {
             let wrapper = document.createElement("div");
             wrapper.style.position = "relative";
             wrapper.style.display = "inline-block";
             
             let img = document.createElement("img");
             img.src = src;
-            img.style.width = "100px";
-            img.style.height = "100px";
-            img.style.objectFit = "cover";
-            img.style.borderRadius = "8px";
-            img.style.border = "1px solid #444";
+            img.style.width = "100px"; img.style.height = "100px"; img.style.objectFit = "cover"; img.style.borderRadius = "8px"; img.style.border = "1px solid #444";
             
-            // Кнопка видалення (хрестик)
             let delBtn = document.createElement("button");
             delBtn.innerHTML = "❌";
-            delBtn.style.position = "absolute";
-            delBtn.style.top = "-8px";
-            delBtn.style.right = "-8px";
-            delBtn.style.background = "#1a1a1a";
-            delBtn.style.border = "1px solid #333";
-            delBtn.style.borderRadius = "50%";
-            delBtn.style.cursor = "pointer";
-            delBtn.style.padding = "4px";
+            delBtn.style.position = "absolute"; delBtn.style.top = "-8px"; delBtn.style.right = "-8px";
+            delBtn.style.background = "#1a1a1a"; delBtn.style.border = "1px solid #333"; delBtn.style.borderRadius = "50%"; delBtn.style.cursor = "pointer"; delBtn.style.padding = "4px";
             
             delBtn.onclick = () => {
-                savedCerts.splice(index, 1);
-                localStorage.setItem("adminCertList", JSON.stringify(savedCerts));
+                certData.list.splice(index, 1);
+                saveCertificatesToDB();
                 renderAdminCerts();
-                renderClientCerts();
             };
             
             wrapper.appendChild(img);
@@ -1054,125 +1248,116 @@ window.renderAdminCerts = function() {
     }
 }
 
-// Слухаємо перемикачі (Так/Ні)
+// --- ОБРОБНИКИ ПОДІЙ ДЛЯ АДМІНА ---
 if (certStatusNo && certStatusYes) {
     certStatusNo.addEventListener("change", () => {
-        certStatus = "no";
-        localStorage.setItem("adminCertStatus", "no");
+        certData.status = "no";
+        saveCertificatesToDB();
         renderAdminCerts();
-        renderClientCerts();
     });
     certStatusYes.addEventListener("change", () => {
-        certStatus = "yes";
-        localStorage.setItem("adminCertStatus", "yes");
+        certData.status = "yes";
+        saveCertificatesToDB();
         renderAdminCerts();
-        renderClientCerts();
     });
 }
 
-// Завантаження нового фото (стиснення перед збереженням)
 if (certFileInputAdmin) {
     certFileInputAdmin.addEventListener("change", function(e) {
-        const file = e.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = function(event) {
-            const img = new Image();
-            img.onload = function() {
-                const canvas = document.createElement("canvas");
-                const ctx = canvas.getContext("2d");
-                
-                // Стискаємо, щоб не переповнити пам'ять браузера
-                const MAX_WIDTH = 800;
-                let width = img.width;
-                let height = img.height;
-                
-                if (width > MAX_WIDTH) {
-                    height = Math.round((height * MAX_WIDTH) / width);
-                    width = MAX_WIDTH;
-                }
-                
-                canvas.width = width;
-                canvas.height = height;
-                ctx.drawImage(img, 0, 0, width, height);
-                
-                // Зберігаємо як стиснений JPEG
-                const base64Image = canvas.toDataURL("image/jpeg", 0.7);
-                savedCerts.push(base64Image);
-                
-                try {
-                    localStorage.setItem("adminCertList", JSON.stringify(savedCerts));
-                    renderAdminCerts();
-                    renderClientCerts();
-                } catch (err) {
-                    alert("⚠️ Пам'ять браузера переповнена! Видаліть старі сертифікати перед додаванням нових.");
-                    savedCerts.pop(); 
-                }
-            };
-            img.src = event.target.result;
-        };
-        reader.readAsDataURL(file);
+        // Використовуємо універсальний компресор з 15-го блоку
+        compressAndSaveImage(e.target.files[0], (base64) => {
+            if (certData.list.length >= 10) {
+                alert("❌ Досягнуто ліміт у 10 сертифікатів. Видаліть старі.");
+                return;
+            }
+            certData.list.push(base64);
+            saveCertificatesToDB();
+            renderAdminCerts();
+        });
     });
 }
 
-// Запускаємо перевірку одразу при завантаженні сайту
-renderClientCerts();
+// Запуск при старті
+loadCertificates();
+
 // ==========================================
-// 15. ПРОФІЛЬ МАЙСТРА ТА ПОРТФОЛІО
+// 15. ПРОФІЛЬ МАЙСТРА ТА ПОРТФОЛІО (SUPABASE)
 // ==========================================
-// Елементи клієнта (Головна)
 const clientMasterImg = document.getElementById("clientMasterImg");
 const clientMasterName = document.getElementById("clientMasterName");
 const clientMasterDesc = document.getElementById("clientMasterDesc");
 const portfolioSectionClient = document.getElementById("portfolioSectionClient");
 const portfolioCarouselContainer = document.getElementById("portfolioCarouselContainer");
 
-// Елементи адмінки
 const adminMasterNameInput = document.getElementById("adminMasterNameInput");
 const adminMasterDescInput = document.getElementById("adminMasterDescInput");
 const adminMasterPhotoPreview = document.getElementById("adminMasterPhotoPreview");
 const saveMasterInfoBtn = document.getElementById("saveMasterInfoBtn");
 const masterPhotoUpload = document.getElementById("masterPhotoUpload");
-
 const portfolioStatusNo = document.getElementById("portfolioStatusNo");
 const portfolioStatusYes = document.getElementById("portfolioStatusYes");
 const portfolioUploadContainer = document.getElementById("portfolioUploadContainer");
 const portfolioFileInput = document.getElementById("portfolioFileInput");
 const adminPortfolioList = document.getElementById("adminPortfolioList");
 
-// --- Базові дані (якщо ще нічого не змінювали) ---
-const defaultMasterName = "Ваш майстер";
-const defaultMasterDesc = "Привіт! Я — топ-майстер з досвідом понад 5 років...\n\nПрацюю виключно на преміум-матеріалах.";
-const defaultMasterPhoto = "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&q=80";
+// --- СТРУКТУРА ДАНИХ ---
+let masterData = {
+    name: "Ваш майстер",
+    desc: "Привіт! Я — топ-майстер...",
+    photo: "https://images.unsplash.com/photo-1604654894610-df63bc536371?auto=format&fit=crop&q=80",
+    portfolioStatus: "no",
+    portfolioList: []
+};
 
-// --- Завантажуємо з пам'яті ---
-let savedMasterName = localStorage.getItem("adminMasterName") || defaultMasterName;
-let savedMasterDesc = localStorage.getItem("adminMasterDesc") || defaultMasterDesc;
-let savedMasterPhoto = localStorage.getItem("adminMasterPhoto") || defaultMasterPhoto;
+// --- ЗАВАНТАЖЕННЯ З БЕКЕНДУ ---
+async function loadMasterProfile() {
+    const { data, error } = await supabaseClient
+        .from('app_settings')
+        .select('setting_value')
+        .eq('setting_key', 'master_profile')
+        .single();
 
-let portfolioStatus = localStorage.getItem("adminPortfolioStatus") || "no";
-let savedPortfolio = JSON.parse(localStorage.getItem("adminPortfolioList")) || [];
+    if (data && data.setting_value) {
+        masterData = { ...masterData, ...data.setting_value };
+    }
+    
+    renderClientMasterProfile();
+    if (document.body.classList.contains("admin-mode-active")) {
+        renderAdminMasterProfile();
+    }
+}
 
-// --- Функція: Оновлення сторінки клієнта ---
+// --- ЗБЕРЕЖЕННЯ НА БЕКЕНД ---
+async function saveMasterProfileToDB() {
+    const { error } = await supabaseClient
+        .from('app_settings')
+        .update({ setting_value: masterData })
+        .eq('setting_key', 'master_profile');
+
+    if (error) {
+        console.error("Помилка збереження профілю:", error);
+        alert("❌ Відмова у доступі. Ви не авторизовані!");
+    } else {
+        renderClientMasterProfile();
+    }
+}
+
+// --- ВІДОБРАЖЕННЯ ДЛЯ КЛІЄНТА ---
 function renderClientMasterProfile() {
-    if (clientMasterName) clientMasterName.innerText = savedMasterName;
-    if (clientMasterDesc) clientMasterDesc.innerText = savedMasterDesc;
-    if (clientMasterImg) clientMasterImg.src = savedMasterPhoto;
+    if (clientMasterName) clientMasterName.innerText = masterData.name;
+    if (clientMasterDesc) clientMasterDesc.innerText = masterData.desc;
+    if (clientMasterImg) clientMasterImg.src = masterData.photo;
 
-    // Портфоліо
     if (portfolioSectionClient && portfolioCarouselContainer) {
-        if (portfolioStatus === "no" || savedPortfolio.length === 0) {
+        if (masterData.portfolioStatus === "no" || masterData.portfolioList.length === 0) {
             portfolioSectionClient.style.display = "none";
         } else {
             portfolioSectionClient.style.display = "block";
             portfolioCarouselContainer.innerHTML = "";
-            savedPortfolio.forEach(src => {
+            masterData.portfolioList.forEach(src => {
                 let img = document.createElement("img");
                 img.src = src;
-                img.className = "cert-img"; // Використовуємо ті ж стилі, що й для сертифікатів
-                img.alt = "Робота майстра";
-                // Додаємо можливість відкрити на весь екран через ту ж модалку
+                img.className = "cert-img";
                 img.onclick = () => window.openCert(src); 
                 portfolioCarouselContainer.appendChild(img);
             });
@@ -1180,14 +1365,14 @@ function renderClientMasterProfile() {
     }
 }
 
-// --- Функція: Відображення в Адмінці ---
+// --- ВІДОБРАЖЕННЯ В АДМІНЦІ ---
 window.renderAdminMasterProfile = function() {
-    if (adminMasterNameInput) adminMasterNameInput.value = savedMasterName;
-    if (adminMasterDescInput) adminMasterDescInput.value = savedMasterDesc;
-    if (adminMasterPhotoPreview) adminMasterPhotoPreview.src = savedMasterPhoto;
+    if (adminMasterNameInput) adminMasterNameInput.value = masterData.name;
+    if (adminMasterDescInput) adminMasterDescInput.value = masterData.desc;
+    if (adminMasterPhotoPreview) adminMasterPhotoPreview.src = masterData.photo;
 
     if (portfolioStatusNo && portfolioStatusYes && portfolioUploadContainer) {
-        if (portfolioStatus === "yes") {
+        if (masterData.portfolioStatus === "yes") {
             portfolioStatusYes.checked = true;
             portfolioUploadContainer.style.display = "block";
         } else {
@@ -1198,34 +1383,24 @@ window.renderAdminMasterProfile = function() {
 
     if (adminPortfolioList) {
         adminPortfolioList.innerHTML = "";
-        savedPortfolio.forEach((src, index) => {
+        masterData.portfolioList.forEach((src, index) => {
             let wrapper = document.createElement("div");
             wrapper.style.position = "relative";
             wrapper.style.display = "inline-block";
             
             let img = document.createElement("img");
             img.src = src;
-            img.style.width = "100px";
-            img.style.height = "100px";
-            img.style.objectFit = "cover";
-            img.style.borderRadius = "8px";
+            img.style.width = "100px"; img.style.height = "100px"; img.style.objectFit = "cover"; img.style.borderRadius = "8px";
             
             let delBtn = document.createElement("button");
             delBtn.innerHTML = "❌";
-            delBtn.style.position = "absolute";
-            delBtn.style.top = "-8px";
-            delBtn.style.right = "-8px";
-            delBtn.style.background = "#1a1a1a";
-            delBtn.style.border = "1px solid #333";
-            delBtn.style.borderRadius = "50%";
-            delBtn.style.cursor = "pointer";
-            delBtn.style.padding = "4px";
+            delBtn.style.position = "absolute"; delBtn.style.top = "-8px"; delBtn.style.right = "-8px";
+            delBtn.style.background = "#1a1a1a"; delBtn.style.border = "1px solid #333"; delBtn.style.borderRadius = "50%"; delBtn.style.cursor = "pointer"; delBtn.style.padding = "4px";
             
             delBtn.onclick = () => {
-                savedPortfolio.splice(index, 1);
-                localStorage.setItem("adminPortfolioList", JSON.stringify(savedPortfolio));
+                masterData.portfolioList.splice(index, 1);
+                saveMasterProfileToDB();
                 renderAdminMasterProfile();
-                renderClientMasterProfile();
             };
             
             wrapper.appendChild(img);
@@ -1235,66 +1410,55 @@ window.renderAdminMasterProfile = function() {
     }
 }
 
-// --- Збереження тексту та імені ---
+// --- ОБРОБНИКИ ПОДІЙ ДЛЯ АДМІНА ---
 if (saveMasterInfoBtn) {
     saveMasterInfoBtn.addEventListener("click", () => {
-        savedMasterName = adminMasterNameInput.value.trim() || defaultMasterName;
-        savedMasterDesc = adminMasterDescInput.value.trim() || defaultMasterDesc;
-        
-        localStorage.setItem("adminMasterName", savedMasterName);
-        localStorage.setItem("adminMasterDesc", savedMasterDesc);
-        
-        renderClientMasterProfile();
-        alert("✅ Дані майстра збережено!");
+        masterData.name = adminMasterNameInput.value.trim() || "Ваш майстер";
+        masterData.desc = adminMasterDescInput.value.trim() || "";
+        saveMasterProfileToDB();
+        alert("✅ Дані майстра успішно збережено на сервері!");
     });
 }
 
-// --- Завантаження головного фото ---
 if (masterPhotoUpload) {
     masterPhotoUpload.addEventListener("change", function(e) {
         compressAndSaveImage(e.target.files[0], (base64) => {
-            savedMasterPhoto = base64;
-            localStorage.setItem("adminMasterPhoto", savedMasterPhoto);
+            masterData.photo = base64;
+            saveMasterProfileToDB();
             renderAdminMasterProfile();
-            renderClientMasterProfile();
         });
     });
 }
 
-// --- Перемикачі Портфоліо ---
 if (portfolioStatusNo && portfolioStatusYes) {
     portfolioStatusNo.addEventListener("change", () => {
-        portfolioStatus = "no";
-        localStorage.setItem("adminPortfolioStatus", "no");
+        masterData.portfolioStatus = "no";
+        saveMasterProfileToDB();
         renderAdminMasterProfile();
-        renderClientMasterProfile();
     });
     portfolioStatusYes.addEventListener("change", () => {
-        portfolioStatus = "yes";
-        localStorage.setItem("adminPortfolioStatus", "yes");
+        masterData.portfolioStatus = "yes";
+        saveMasterProfileToDB();
         renderAdminMasterProfile();
-        renderClientMasterProfile();
     });
 }
 
-// --- Завантаження фото в Портфоліо ---
 if (portfolioFileInput) {
     portfolioFileInput.addEventListener("change", function(e) {
         compressAndSaveImage(e.target.files[0], (base64) => {
-            savedPortfolio.push(base64);
-            try {
-                localStorage.setItem("adminPortfolioList", JSON.stringify(savedPortfolio));
-                renderAdminMasterProfile();
-                renderClientMasterProfile();
-            } catch (err) {
-                alert("⚠️ Пам'ять браузера переповнена! Видаліть старі фото перед додаванням нових.");
-                savedPortfolio.pop();
+            // Щоб уникнути перевищення ліміту колонки JSONB, обмежуємо масив до 10 фото
+            if (masterData.portfolioList.length >= 10) {
+                alert("❌ Досягнуто ліміт у 10 фото для портфоліо. Видаліть старі.");
+                return;
             }
+            masterData.portfolioList.push(base64);
+            saveMasterProfileToDB();
+            renderAdminMasterProfile();
         });
     });
 }
 
-// --- Універсальна функція стиснення картинок ---
+// --- УНІВЕРСАЛЬНИЙ КОМПРЕСОР ФОТО ---
 function compressAndSaveImage(file, callback) {
     if (!file) return;
     const reader = new FileReader();
@@ -1303,21 +1467,17 @@ function compressAndSaveImage(file, callback) {
         img.onload = function() {
             const canvas = document.createElement("canvas");
             const ctx = canvas.getContext("2d");
-            
-            const MAX_WIDTH = 800; // Стискаємо до 800px по ширині
-            let width = img.width;
-            let height = img.height;
-            
+            const MAX_WIDTH = 600; // Жорстко ріжемо ширину для JSONB
+            let width = img.width; let height = img.height;
             if (width > MAX_WIDTH) {
                 height = Math.round((height * MAX_WIDTH) / width);
                 width = MAX_WIDTH;
             }
-            
-            canvas.width = width;
-            canvas.height = height;
+            canvas.width = width; canvas.height = height;
             ctx.drawImage(img, 0, 0, width, height);
             
-            const base64Image = canvas.toDataURL("image/jpeg", 0.7);
+            // Сильне стиснення (0.6), щоб база даних не захлинулася від Base64
+            const base64Image = canvas.toDataURL("image/jpeg", 0.6);
             callback(base64Image);
         };
         img.src = event.target.result;
@@ -1326,4 +1486,4 @@ function compressAndSaveImage(file, callback) {
 }
 
 // Запуск при старті
-renderClientMasterProfile();
+loadMasterProfile();

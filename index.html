@@ -175,14 +175,15 @@
                 <div class="table-responsive">
                     <table class="admin-table">
                         <thead>
-                            <tr><th>Клієнт</th><th>Телефон</th><th>Дата і Час</th><th>Послуги</th><th>Дія</th></tr>
+                            <!-- ПРАВИЛЬНА ШАПКА ДЛЯ МАЙБУТНІХ ЗАПИСІВ (6 КОЛОНОК) -->
+                            <tr><th>Клієнт</th><th>Телефон</th><th>Дата і Час</th><th>Послуги</th><th>Статус</th><th>Дія</th></tr>
                         </thead>
                         <tbody id="upcomingTableBody"></tbody>
                     </table>
                 </div>
             </div>
 
-            <div id="clientDatabaseView" style="display: none;">
+           <div id="clientDatabaseView" style="display: none;">
                 <button class="back-to-menu-btn" onclick="switchCabinetView('cabinetMenuSection')">🔙 Назад до меню</button>
                 <h2 style="color: var(--accent-pink); margin-bottom: 20px;">👥 База клієнтів</h2>
                 <div class="admin-stats">
@@ -193,6 +194,7 @@
                 <div class="table-responsive">
                     <table class="admin-table">
                         <thead>
+                            <!-- ПРАВИЛЬНА ШАПКА ДЛЯ БАЗИ КЛІЄНТІВ (5 КОЛОНОК) -->
                             <tr><th>Ім'я</th><th>Телефон</th><th>Останній запис</th><th>К-сть записів</th><th>Дія</th></tr>
                         </thead>
                         <tbody id="adminTableBody"></tbody>
@@ -245,7 +247,7 @@
                     <div id="timeTagsContainer" class="tags-container" style="border-color: #2a2a2a;"></div>
                 </div>
             </div>
-            <!-- ВІКНО 4: РЕДАГУВАННЯ ПРАЙСУ -->
+           <!-- ВІКНО 4: РЕДАГУВАННЯ ПРАЙСУ -->
             <div id="priceEditingView" style="display: none;">
                 <button class="back-to-menu-btn" onclick="switchCabinetView('cabinetMenuSection')">🔙 Назад до меню</button>
                 <h2 style="color: var(--accent-pink); margin-bottom: 20px;">💰 Редагування прайсу</h2>
@@ -253,8 +255,12 @@
                 <div class="schedule-editor-container" style="margin-bottom: 20px;">
                     <h3 style="color: #e0e0e0; margin-bottom: 10px; font-size: 1.1rem;">Додати нову послугу</h3>
                     <div style="display: flex; gap: 15px; margin-bottom: 20px; flex-wrap: wrap;">
-                        <input type="text" id="newServiceName" placeholder="Назва послуги (напр. Нарощення)" class="admin-date-input" style="flex: 2; min-width: 200px;">
-                        <input type="number" id="newServicePrice" placeholder="Ціна (₴)" class="admin-date-input" style="flex: 1; min-width: 100px;">
+                        <input type="text" id="newServiceName" placeholder="Назва послуги" class="admin-date-input" style="flex: 2; min-width: 200px;">
+                        <input type="number" id="newServicePrice" placeholder="Ціна (₴)" class="admin-date-input" style="flex: 1; min-width: 80px;">
+                        
+                        <!-- НОВЕ ПОЛЕ ДЛЯ ЧАСУ -->
+                        <input type="number" id="newServiceDuration" placeholder="Час (хв)" class="admin-date-input" style="flex: 1; min-width: 80px;" value="60">
+                        
                         <button id="addNewServiceBtn" class="cta-btn" style="padding: 10px 20px;">Додати</button>
                     </div>
                 </div>
@@ -267,6 +273,7 @@
                                 <tr>
                                     <th style="text-align: left;">Назва послуги</th>
                                     <th>Ціна (₴)</th>
+                                    <th>Тривалість</th> <!-- ДОДАЛИ ЦЕ -->
                                     <th>Дія</th>
                                 </tr>
                             </thead>
@@ -391,6 +398,9 @@
 
             <div id="adminLoginSection" style="display: none; margin-top: 15px;">
                 <p style="color: var(--accent-pink); text-align: center; margin-bottom: 15px; font-weight: bold;">🔒 Вхід для адміністратора</p>
+                <!-- Додано поле для пошти -->
+                <input type="email" id="adminEmailInput" placeholder="Електронна пошта" style="margin-bottom: 15px; width: 100%; padding: 12px 15px; background: #1a1a1a; border: 1px solid #333; border-radius: 8px; color: white;">
+                
                 <input type="password" id="adminPasswordInput" placeholder="Введіть пароль" style="margin-bottom: 15px;">
                 <button class="cta-btn submit-btn" id="loginAdminBtn">Увійти в систему</button>
             </div>
